@@ -1,77 +1,77 @@
 use std::collections::HashMap;
-
-#[derive(Debug, PartialEq)]
-pub enum BencodedValue {
+use anyhow::{Result, anyhow};
+#[derive(Debug, PartialEq, Clone)]
+pub enum Value {
     Int(i64),
     Str(Vec<u8>),
-    List(Vec<BencodedValue>),
-    Dict(HashMap<String, BencodedValue>),
+    List(Vec<Value>),
+    Dict(HashMap<String, Value>),
 }
-pub use BencodedValue::{Dict, Int, List, Str};
+pub use Value::{Dict, Int, List, Str};
 
-fn parse_int(buffer: &[u8], start: &mut usize) -> Result<BencodedValue, &'static str> {
+fn parse_int(buffer: &[u8], start: &mut usize) -> Result<Value> {
     if buffer.get(*start) == Some(&b'i') {
         let end_pos = buffer[*start + 1..]
             .iter()
             .position(|&c| c == b'e')
-            .ok_or("Expected 'e' after 'i'")?
+            .ok_or(anyhow!("Expected 'e' after 'i'"))?
             + *start
             + 1;
 
         let num = &buffer[*start + 1..end_pos];
         let num_str =
-            std::str::from_utf8(num).map_err(|_| "Failed to convert string length to utf-8.")?;
+            std::str::from_utf8(num).map_err(|_|anyhow!("Failed to convert string length to utf-8."))?;
         let num = num_str
             .parse::<i64>()
-            .map_err(|_| "Failed to parse num_str as u64")?;
+            .map_err(|_| anyhow!("Failed to parse num_str as u64"))?;
         *start = end_pos + 1;
         Ok(Int(num))
     } else {
-        Err("Integer encoding must start with 'i'")
+        Err(anyhow!("Integer encoding must start with 'i'"))
     }
 }
 
-fn parse_str(buffer: &[u8], start: &mut usize) -> Result<BencodedValue, &'static str> {
+fn parse_str(buffer: &[u8], start: &mut usize) -> Result<Value> {
     let input = &buffer[*start..];
     let delimiter = input
         .iter()
         .position(|&c| c == b':')
-        .ok_or("Expected to find delimiter : while parsing Vec<u8>.")?;
+        .ok_or(anyhow!("Expected to find delimiter : while parsing Vec<u8>."))?;
 
     let len = std::str::from_utf8(&input[0..delimiter])
-        .map_err(|_| "Failed to interpred string length as utf-8.")?
+        .map_err(|_| anyhow!("Failed to interpred string length as utf-8."))?
         .parse::<usize>()
-        .map_err(|_| "Failed to parse size length into usize")?;
+        .map_err(|_| anyhow!("Failed to parse size length into usize"))?;
     let s = &input[delimiter + 1..delimiter + 1 + len];
     *start += delimiter + 1 + len as usize;
-    Ok(BencodedValue::Str(s.to_owned()))
+    Ok(Value::Str(s.to_owned()))
 }
 
-fn parse_list(buffer: &[u8], start: &mut usize) -> Result<BencodedValue, &'static str> {
+fn parse_list(buffer: &[u8], start: &mut usize) -> Result<Value> {
     if buffer.get(*start) == Some(&b'l') {
         *start += 1;
-        let mut list: Vec<BencodedValue> = Vec::new();
+        let mut list: Vec<Value> = Vec::new();
         while buffer.get(*start) != Some(&b'e') {
             list.push(parse_bencode(buffer, start)?)
         }
 
         *start += 1;
 
-        Ok(BencodedValue::List(list))
+        Ok(Value::List(list))
     } else {
-        return Err("expected list to start with l");
+        return Err(anyhow!("expected list to start with l"));
     }
 }
 
-fn parse_dict(buffer: &[u8], start: &mut usize) -> Result<BencodedValue, &'static str> {
+fn parse_dict(buffer: &[u8], start: &mut usize) -> Result<Value> {
     if buffer.get(*start) == Some(&b'd') {
         *start += 1;
-        let mut map: HashMap<String, BencodedValue> = HashMap::new();
+        let mut map: HashMap<String, Value> = HashMap::new();
         while buffer.get(*start) != Some(&b'e') {
             if let Str(key) = parse_bencode(buffer, start)? {
                 let value = parse_bencode(buffer, start)?;
                 let utf8_key = std::str::from_utf8(&key)
-                    .map_err(|_| "Failed to parse map key as valid utf-8.")?;
+                    .map_err(|_| anyhow!("Failed to parse map key as valid utf-8."))?;
                 map.insert(utf8_key.to_owned(), value);
             }
         }
@@ -79,27 +79,27 @@ fn parse_dict(buffer: &[u8], start: &mut usize) -> Result<BencodedValue, &'stati
 
         Ok(Dict(map))
     } else {
-        return Err("expected list to start with d");
+        return Err(anyhow!("expected list to start with d"));
     }
 }
 
-fn parse_bencode(buffer: &[u8], start: &mut usize) -> Result<BencodedValue, &'static str> {
+fn parse_bencode(buffer: &[u8], start: &mut usize) -> Result<Value> {
     match &buffer.get(*start) {
         Some(b'i') => parse_int(buffer, start),
         Some(&c) if c.is_ascii_digit() => parse_str(buffer, start),
         Some(b'l') => parse_list(buffer, start),
         Some(b'd') => parse_dict(buffer, start),
-        _ => Err("Invalid bencode format or unsupported bencode value."),
+        _ => Err(anyhow!("Invalid bencode format or unsupported bencode value.")),
     }
 }
 
-pub fn decode(buffer: &[u8]) -> Result<BencodedValue, &'static str> {
+pub fn decode(buffer: &[u8]) -> Result<Value> {
     let mut n: usize = 0;
     parse_bencode(buffer, &mut n)
 }
 
 #[allow(dead_code)]
-fn print_blist(values: &Vec<BencodedValue>) {
+fn print_blist(values: &Vec<Value>) {
     print!("[");
     for (i, value) in values.iter().enumerate() {
         print_bvalue(value);
@@ -110,7 +110,7 @@ fn print_blist(values: &Vec<BencodedValue>) {
     print!("]");
 }
 
-fn blist_to_string(values: &Vec<BencodedValue>) -> Result<String, &'static str> {
+fn blist_to_string(values: &Vec<Value>) -> Result<String> {
     let mut output = "".to_owned();
     output += "[";
     for (i, value) in values.iter().enumerate() {
@@ -124,7 +124,7 @@ fn blist_to_string(values: &Vec<BencodedValue>) -> Result<String, &'static str> 
 }
 
 #[allow(dead_code)]
-fn bdict_to_string_old(values: &HashMap<String, BencodedValue>) -> Result<String, &'static str> {
+fn bdict_to_string_old(values: &HashMap<String, Value>) -> Result<String> {
     let mut output = "".to_owned();
     output += "{";
     let mut sorted_keys = Vec::<String>::new();
@@ -144,11 +144,11 @@ fn bdict_to_string_old(values: &HashMap<String, BencodedValue>) -> Result<String
 }
 
 #[allow(dead_code)]
-fn bdict_to_string(values: &HashMap<String, BencodedValue>) -> Result<String, &'static str> {
-    let mut sorted_keys :Vec<&String> = values.keys().collect();
+fn bdict_to_string(values: &HashMap<String, Value>) -> Result<String> {
+    let mut sorted_keys: Vec<&String> = values.keys().collect();
     sorted_keys.sort();
 
-    let entries : Result<Vec<String>, &'static str>= sorted_keys
+    let entries: Result<Vec<String>> = sorted_keys
         .into_iter()
         .map(|key| to_string(&values[key]).map(|value| format!("\"{key}\":{value}")))
         .collect();
@@ -157,7 +157,7 @@ fn bdict_to_string(values: &HashMap<String, BencodedValue>) -> Result<String, &'
 }
 
 #[allow(dead_code)]
-fn print_bdict(map: &HashMap<String, BencodedValue>) {
+fn print_bdict(map: &HashMap<String, Value>) {
     print!("{{");
     for (i, (key, value)) in map.iter().enumerate() {
         print!("\"{}\" : ", key);
@@ -170,7 +170,7 @@ fn print_bdict(map: &HashMap<String, BencodedValue>) {
 }
 
 #[allow(dead_code)]
-pub fn print_bvalue(value: &BencodedValue) {
+pub fn print_bvalue(value: &Value) {
     match value {
         Int(x) => println!("{:#?}", x),
         Str(s) => println!("{:#?}", s),
@@ -179,23 +179,23 @@ pub fn print_bvalue(value: &BencodedValue) {
     }
 }
 
-pub fn to_string(value: &BencodedValue) -> Result<String, &'static str> {
+pub fn to_string(value: &Value) -> Result<String> {
     Ok(match value {
         Int(x) => format!("{:?}", x),
         Str(s) => format!(
             "{:?}",
-            std::str::from_utf8(s).map_err(|_| "Error converting bytes to utf-8")?
+            std::str::from_utf8(s).map_err(|_| anyhow!("Error converting bytes to utf-8"))?
         ),
         List(list) => blist_to_string(&list)?,
         Dict(values) => bdict_to_string(&values)?,
     }
     .to_owned())
 }
-// fn to_json_list(value: &Vec<BencodedValue>) ->  Result<Value, &'static str> {
+// fn to_json_list(value: &Vec<Value>) ->  Result<Value, &'static str> {
 //     return Ok(Value::Array(value))
 // }
 
-// pub fn to_json(value: &BencodedValue) ->  Result<Value, &'static str>  {
+// pub fn to_json(value: &Value) ->  Result<Value, &'static str>  {
 //     match value {
 //         Int(x) => Ok(Value::Number((*x).into())),
 //         Str(s) => {
@@ -213,15 +213,15 @@ mod tests {
     #[test]
     fn decode_int_success() {
         let buffer = "i42e";
-        assert_eq!(decode(buffer.as_bytes()), Ok(BencodedValue::Int(42)));
+        assert_eq!(decode(buffer.as_bytes()).unwrap(), Value::Int(42));
     }
 
     #[test]
     fn decode_str_success() {
         let buffer = "4:spam";
         assert_eq!(
-            decode(buffer.as_bytes()),
-            Ok(BencodedValue::Str("spam".to_owned().into()))
+            decode(buffer.as_bytes()).unwrap(),
+            Value::Str("spam".to_owned().into())
         );
     }
     #[test]
@@ -272,11 +272,11 @@ mod tests {
     fn decode_nested_list() {
         let buffer = "lli42eei43eee";
         assert_eq!(
-            decode(buffer.as_bytes()),
-            Ok(BencodedValue::List(vec![
-                BencodedValue::List(vec![BencodedValue::Int(42)]),
-                BencodedValue::Int(43)
-            ]))
+            decode(buffer.as_bytes()).unwrap(),
+            Value::List(vec![
+                Value::List(vec![Value::Int(42)]),
+                Value::Int(43)
+            ])
         );
     }
 
@@ -284,14 +284,14 @@ mod tests {
     fn decode_nested_dict() {
         let buffer = "d4:dictd3:keyi42eee";
         let mut inner_dict = HashMap::new();
-        inner_dict.insert("key".to_owned(), BencodedValue::Int(42));
+        inner_dict.insert("key".to_owned(), Value::Int(42));
 
         let mut expected_dict = HashMap::new();
-        expected_dict.insert("dict".to_owned(), BencodedValue::Dict(inner_dict));
+        expected_dict.insert("dict".to_owned(), Value::Dict(inner_dict));
 
         assert_eq!(
-            decode(buffer.as_bytes()),
-            Ok(BencodedValue::Dict(expected_dict))
+            decode(buffer.as_bytes()).unwrap(),
+            Value::Dict(expected_dict)
         );
     }
 
@@ -299,7 +299,7 @@ mod tests {
     fn decode_nested_dict_in_list() {
         let buffer = "li24ed3:keyli3123e3:heli23e3:assi1337eeei23ed3:assi23eee";
         let decoded = decode(buffer.as_bytes()).unwrap();
-        let mut vec1: Vec<BencodedValue> = Vec::new();
+        let mut vec1: Vec<Value> = Vec::new();
         vec1.push(Int(3123));
         vec1.push(Str("hel".to_owned().into()));
         vec1.push(Int(23));
@@ -307,7 +307,7 @@ mod tests {
         vec1.push(Int(1337)); // Corrected value to match input
         let mut d1 = HashMap::new();
         d1.insert("key".to_owned(), List(vec1));
-        let mut outer_vec: Vec<BencodedValue> = Vec::new();
+        let mut outer_vec: Vec<Value> = Vec::new();
         outer_vec.push(Int(24));
         outer_vec.push(Dict(d1));
         outer_vec.push(Int(23));

@@ -1,33 +1,34 @@
 pub mod bencode;
+mod tracker;
+use anyhow::{Result};
 use std::fs;
-use std::io;
+use crate::app::tracker::MetaData;
 
-fn read_binary_file(path: &str) -> io::Result<Vec<u8>> {
+fn read_binary_file(path: &str) -> Result<Vec<u8>> {
     let data = fs::read(path)?;
     Ok(data)
 }
 
-fn decode_bencoded_value(value: &str) -> Result<String, &'static str> {
+fn decode_bencoded_value(value: &str) -> Result<String> {
     let buffer = value.as_bytes();
-    let decoded = bencode::decode(buffer).unwrap();
+    let decoded = bencode::decode(buffer)?;
     return bencode::to_string(&decoded);
 }
 
-fn no_args() -> io::Result<()> {
-    let path = "itsworking.gif.torrent";
+fn no_args() -> Result<()> {
+    let path = "sample.torrent";
     let _content = read_binary_file(path)?;
+    let _test = "di24ed3:keyli3123e3:heli23e3:assi1337eeei23ed3:assi23eee".as_bytes();
+    let decoded = bencode::decode(&_content)?;
 
-    let test = "li24ed3:keyli3123e3:heli23e3:assi1337eeei23ed3:assi23eee";
-    let decoded_test = bencode::decode(test.as_bytes()).unwrap();
-    //     //bencode::print_bvalue(&decoded_test);
-
-    //     let decoded_torrent = bencode::decode(&_content).unwrap();
-    //    // bencode::print_bvalue(&decoded_torrent);
-    println!("{}", bencode::to_string(&decoded_test).unwrap());
+    let torrent_info = MetaData::new(decoded)?;
+    println!("{:#?}", torrent_info);
+    println!("Tracker URL: {}", torrent_info.announce);
+    println!("Length: {}", torrent_info.info.length);
     Ok(())
 }
 
-pub fn entrypoint(args: Vec<String>) -> io::Result<()> {
+pub fn entrypoint(args: Vec<String>) -> Result<()> {
     if args.len() < 2 {
         let _ = no_args()?;
     } else {
@@ -35,8 +36,15 @@ pub fn entrypoint(args: Vec<String>) -> io::Result<()> {
 
         if command == "decode" {
             let encoded_value = &args[2];
-            let decoded_value = decode_bencoded_value(encoded_value).unwrap();
+            let decoded_value = decode_bencoded_value(encoded_value)?;
             println!("{}", decoded_value);
+        } else if command == "info" {
+            let path = &args[2];
+            let _content = read_binary_file(path)?;
+            let data =  bencode::decode(&_content)?;
+            let torrent_info = MetaData::new(data)?;
+            println!("Tracker URL: {}", torrent_info.announce);
+            println!("Length: {}", torrent_info.info.length);
         } else {
             println!("unknown command: {}", args[1])
         }
