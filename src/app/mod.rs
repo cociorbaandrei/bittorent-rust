@@ -30,6 +30,7 @@ fn no_args() -> Result<()> {
     let mut hasher = Sha1::new();
     if let bencode::Dict(dict) = &data {
         let info = bencode::to_vec_u8(&dict["info"])?;
+        println!("{:#?}", info);
        // hasher.update(info);
         Digest::update(&mut hasher, info);
         let hashed_data  = hasher.finalize().to_vec();

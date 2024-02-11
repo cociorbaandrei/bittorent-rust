@@ -216,9 +216,9 @@ fn bdict_to_vecu8(values: &HashMap<String, Value>) -> Result<Vec<u8>> {
     }
     sorted_keys.sort();
     for (i, key) in sorted_keys.iter().enumerate() {
-        output.extend_from_slice(b"\"{");
+        output.extend_from_slice(b"\"");
         output.extend_from_slice(key.as_bytes());
-        output.extend_from_slice(b"}\":");
+        output.extend_from_slice(b"\":");
         let v = to_vec_u8(&values[key])?;
         output.extend_from_slice(&v);
         if i != values.len() - 1 {
@@ -232,7 +232,13 @@ fn bdict_to_vecu8(values: &HashMap<String, Value>) -> Result<Vec<u8>> {
 pub fn to_vec_u8(value: &Value) -> Result<Vec<u8>> {
     Ok(match value {
         Int(x) => format!("{:?}", x).as_bytes().to_owned(),
-        Str(s) => s.to_owned(),
+        Str(s) => {
+            let mut output = "".as_bytes().to_owned();
+            output.push(b'\"');
+            output.extend_from_slice(s);
+            output.push(b'\"');
+            output
+        },
         List(list) => blist_to_vec_u8(&list)?,
         Dict(values) => bdict_to_vecu8(&values)?,
     }.to_owned())
