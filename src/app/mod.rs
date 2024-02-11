@@ -3,6 +3,8 @@ mod tracker;
 use anyhow::{Result};
 use std::fs;
 use crate::app::tracker::MetaData;
+use sha1::{Sha1, Digest};
+use sha1::digest::Update;
 
 fn read_binary_file(path: &str) -> Result<Vec<u8>> {
     let data = fs::read(path)?;
@@ -19,12 +21,21 @@ fn no_args() -> Result<()> {
     let path = "sample.torrent";
     let _content = read_binary_file(path)?;
     let _test = "di24ed3:keyli3123e3:heli23e3:assi1337eeei23ed3:assi23eee".as_bytes();
-    let decoded = bencode::decode(&_content)?;
+    let data = bencode::decode(&_content)?;
 
-    let torrent_info = MetaData::new(decoded)?;
+    let torrent_info = MetaData::new(data.clone())?;
     println!("{:#?}", torrent_info);
     println!("Tracker URL: {}", torrent_info.announce);
     println!("Length: {}", torrent_info.info.length);
+    let mut hasher = Sha1::new();
+    if let bencode::Dict(dict) = &data {
+        let info = bencode::to_vec_u8(&dict["info"])?;
+       // hasher.update(info);
+        Digest::update(&mut hasher, info);
+        let hashed_data  = hasher.finalize().to_vec();
+
+        println!("Hashed data: {}", hashed_data.iter().map(|byte| format!("{:02x}", byte)).collect::<String>());
+    }
     Ok(())
 }
 
@@ -42,9 +53,18 @@ pub fn entrypoint(args: Vec<String>) -> Result<()> {
             let path = &args[2];
             let _content = read_binary_file(path)?;
             let data =  bencode::decode(&_content)?;
-            let torrent_info = MetaData::new(data)?;
+            let torrent_info = MetaData::new(data.clone())?;
             println!("Tracker URL: {}", torrent_info.announce);
             println!("Length: {}", torrent_info.info.length);
+            let mut hasher = Sha1::new();
+            if let bencode::Dict(dict) = &data {
+                let info = bencode::to_vec_u8(&dict["info"])?;
+                // hasher.update(info);
+                Digest::update(&mut hasher, info);
+                let hashed_data  = hasher.finalize().to_vec();
+
+                println!("Hashed data: {}", hashed_data.iter().map(|byte| format!("{:02x}", byte)).collect::<String>());
+            }
         } else {
             println!("unknown command: {}", args[1])
         }

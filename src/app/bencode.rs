@@ -191,21 +191,54 @@ pub fn to_string(value: &Value) -> Result<String> {
     }
     .to_owned())
 }
-// fn to_json_list(value: &Vec<Value>) ->  Result<Value, &'static str> {
-//     return Ok(Value::Array(value))
-// }
 
-// pub fn to_json(value: &Value) ->  Result<Value, &'static str>  {
-//     match value {
-//         Int(x) => Ok(Value::Number((*x).into())),
-//         Str(s) => {
-//              Ok(Value::String(std::str::from_utf8(s).map_err(|_| "Error serializing to json string")?.to_owned()))
-//         },
-//         List(list) => Value::Number(1),
-//         Dict(values) => println!("{:#?}", values),
-//         _ =>  Err("Invalid bencode format or unsupported bencode value.")
-//     }
-// }
+
+fn blist_to_vec_u8(values: &Vec<Value>) -> Result<Vec<u8>> {
+    let mut output:Vec<u8> = "".as_bytes().to_owned();
+    output.push(b'[');
+    for (i, value) in values.iter().enumerate() {
+        let v = &to_vec_u8(value)?;
+        output.extend_from_slice(v);
+        if i != values.len() - 1 {
+            output.push(b',');
+        }
+    }
+    output.push(b']');
+    Ok(output)
+}
+#[allow(dead_code)]
+fn bdict_to_vecu8(values: &HashMap<String, Value>) -> Result<Vec<u8>> {
+    let mut output = "".as_bytes().to_owned();
+    output.push(b'{');
+    let mut sorted_keys = Vec::<String>::new();
+    for (key, _) in values.iter() {
+        sorted_keys.push(key.to_owned());
+    }
+    sorted_keys.sort();
+    for (i, key) in sorted_keys.iter().enumerate() {
+        output.extend_from_slice(b"\"{");
+        output.extend_from_slice(key.as_bytes());
+        output.extend_from_slice(b"}\":");
+        let v = to_vec_u8(&values[key])?;
+        output.extend_from_slice(&v);
+        if i != values.len() - 1 {
+            output.push(b',');
+        }
+    }
+    output.push(b'}');
+    Ok(output)
+}
+
+pub fn to_vec_u8(value: &Value) -> Result<Vec<u8>> {
+    Ok(match value {
+        Int(x) => format!("{:?}", x).as_bytes().to_owned(),
+        Str(s) => s.to_owned(),
+        List(list) => blist_to_vec_u8(&list)?,
+        Dict(values) => bdict_to_vecu8(&values)?,
+    }.to_owned())
+}
+
+
 
 #[cfg(test)]
 mod tests {
