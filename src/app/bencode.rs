@@ -196,7 +196,7 @@ pub fn to_string(value: &Value) -> Result<String> {
 fn blist_to_vec_u8(values: &Vec<Value>) -> Result<Vec<u8>> {
     let mut output:Vec<u8> = "".as_bytes().to_owned();
     output.push(b'l');
-    for (i, value) in values.iter().enumerate() {
+    for value in values.iter() {
         output.extend_from_slice(&to_vec_u8(value)?);
     }
     output.push(b'e');
@@ -211,7 +211,7 @@ fn bdict_to_vecu8(values: &HashMap<String, Value>) -> Result<Vec<u8>> {
         sorted_keys.push(key.to_owned());
     }
     sorted_keys.sort();
-    for (i, key) in sorted_keys.iter().enumerate() {
+    for (_i, key) in sorted_keys.iter().enumerate() {
         output.extend_from_slice(format!("{:?}:", key.len()).as_bytes());
         output.extend_from_slice(key.as_bytes());
         output.extend_from_slice(&to_vec_u8(&values[key])?);
