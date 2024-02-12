@@ -2,18 +2,21 @@ use crate::app::bencode;
 use crate::app::bencode::Value;
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
+use sha1::{Sha1, Digest};
+use sha1::digest::Update;
 
 #[allow(unused_imports)]
 #[derive(Debug, Clone)]
 pub struct MetaData {
     pub announce: String,
     pub info: Info,
+    raw : Value,
 }
 
 impl MetaData {
     pub(crate) fn new(values: bencode::Value) -> Result<Self> {
         match values {
-            bencode::Dict(map) => {
+            bencode::Dict(ref map) => {
                 let announce = map.get("announce")
                     .and_then(|announce| match announce {
                         Value::Str(url) => Some(std::str::from_utf8(url)),
@@ -30,10 +33,13 @@ impl MetaData {
                     })
                     .ok_or(anyhow!("Missing or invalid 'info'"))??;
 
-                Some(Self { announce, info })
+                Some(Self { announce, info , raw: values})
             }
             _ => None,
         }.ok_or( anyhow!("Expected object to be a dictionary."))
+    }
+    pub(crate) fn raw(&self) -> &Value {
+        &self.raw
     }
 }
 
@@ -78,5 +84,12 @@ impl Info {
             .ok_or(anyhow!("Expected that 'length' is an integer."))?;
 
         Ok(Self { length,name, piece_length, pieces })
+    }
+    pub(crate) fn hashes(&self) -> Vec<String> {
+        let piece_hashes: Vec<String> = self.pieces
+            .chunks(20)
+            .map(|chunk| chunk.iter().map(|byte| format!("{:02x}", byte)).collect::<String>())
+            .collect();
+        return piece_hashes;
     }
 }

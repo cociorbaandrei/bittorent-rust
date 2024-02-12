@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 use anyhow::{Result, anyhow};
+use sha1::{Digest, Sha1};
+pub use Value::{Dict, Int, List, Str};
+use crate::app::bencode;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Int(i64),
@@ -7,7 +11,23 @@ pub enum Value {
     List(Vec<Value>),
     Dict(HashMap<String, Value>),
 }
-pub use Value::{Dict, Int, List, Str};
+
+impl Value {
+    pub(crate) fn info_hash(&self) -> Result<String> {
+        Ok(self.info_hash_u8()?.iter().map(|byte| format!("{:02x}", byte)).collect::<String>())
+    }
+
+    pub(crate) fn info_hash_u8(&self) -> Result<Vec<u8>> {
+        let mut hasher = Sha1::new();
+        if let bencode::Dict(dict) = self {
+            let info = bencode::to_vec_u8(&dict["info"])?;
+            Digest::update(&mut hasher, info);
+            let hashed_data  = hasher.finalize().to_vec();
+            return Ok(hashed_data)
+        }
+        Err(anyhow!("Expected dictionary for info."))
+    }
+}
 
 fn parse_int(buffer: &[u8], start: &mut usize) -> Result<Value> {
     if buffer.get(*start) == Some(&b'i') {
@@ -33,6 +53,7 @@ fn parse_int(buffer: &[u8], start: &mut usize) -> Result<Value> {
 
 fn parse_str(buffer: &[u8], start: &mut usize) -> Result<Value> {
     let input = &buffer[*start..];
+    println!("{:#?}", input);
     let delimiter = input
         .iter()
         .position(|&c| c == b':')
@@ -43,7 +64,10 @@ fn parse_str(buffer: &[u8], start: &mut usize) -> Result<Value> {
         .parse::<usize>()
         .map_err(|_| anyhow!("Failed to parse size length into usize"))?;
     let s = &input[delimiter + 1..delimiter + 1 + len];
-    *start += delimiter + 1 + len as usize;
+    println!("{:#?}", &buffer[*start..]);
+    *start +=  delimiter + 1 + len;
+
+    println!("{:#?}", &buffer[*start..]);
     Ok(Value::Str(s.to_owned()))
 }
 
@@ -89,7 +113,7 @@ fn parse_bencode(buffer: &[u8], start: &mut usize) -> Result<Value> {
         Some(&c) if c.is_ascii_digit() => parse_str(buffer, start),
         Some(b'l') => parse_list(buffer, start),
         Some(b'd') => parse_dict(buffer, start),
-        _ => Err(anyhow!("Invalid bencode format or unsupported bencode value.")),
+        _ => Err(anyhow!(format!("Invalid bencode format or unsupported bencode value while parsing: {:?}",std::str::from_utf8(&buffer[*start..])?))),
     }
 }
 

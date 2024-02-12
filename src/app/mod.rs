@@ -1,11 +1,11 @@
-pub mod bencode;
+mod bencode;
 mod tracker;
+mod network;
 
-use std::fmt::format;
 use anyhow::{Result};
 use std::fs;
-use clap::builder::Str;
-use crate::app::tracker::MetaData;
+use crate::app::tracker::{MetaData};
+use crate::app::network::*;
 use sha1::{Sha1, Digest};
 
 fn read_binary_file(path: &str) -> Result<Vec<u8>> {
@@ -22,27 +22,16 @@ fn decode_bencoded_value(value: &str) -> Result<String> {
 fn no_args() -> Result<()> {
     let path = "sample.torrent";
     let _content = read_binary_file(path)?;
-    let _test = "di24ed3:keyli3123e3:heli23e3:assi1337eeei23ed3:assi23eee".as_bytes();
     let data = bencode::decode(&_content)?;
 
-    let torrent_info = MetaData::new(data.clone())?;
+    let torrent_info = MetaData::new(data)?;
     println!("{:#?}", torrent_info);
     println!("Tracker URL: {}", torrent_info.announce);
     println!("Length: {}", torrent_info.info.length);
-    let mut hasher = Sha1::new();
-    if let bencode::Dict(dict) = &data {
-        let info = bencode::to_vec_u8(&dict["info"])?;
-        println!("{:#?}", info);
-        Digest::update(&mut hasher, info);
-        let hashed_data  = hasher.finalize().to_vec();
-        println!("Hashed data: {}", hashed_data.iter().map(|byte| format!("{:02x}", byte)).collect::<String>());
-    }
+    println!("Hashed data: {}", torrent_info.raw().info_hash()?);
     println!("Piece Length: {}", torrent_info.info.piece_length);
-    let piece_hashes: Vec<String> = torrent_info.info.pieces
-        .chunks(20)
-        .map(|chunk| chunk.iter().map(|byte| format!("{:02x}", byte)).collect::<String>())
-        .collect();
-    println!("Piece Hashes:\n{}", piece_hashes.join("\n"));
+    println!("Piece Hashes:\n{}", torrent_info.info.hashes().join("\n"));
+    let peers = discover_peers(&torrent_info)?;
     Ok(())
 }
 
@@ -63,19 +52,9 @@ pub fn entrypoint(args: Vec<String>) -> Result<()> {
             let torrent_info = MetaData::new(data.clone())?;
             println!("Tracker URL: {}", torrent_info.announce);
             println!("Length: {}", torrent_info.info.length);
-            let mut hasher = Sha1::new();
-            if let bencode::Dict(dict) = &data {
-                let info = bencode::to_vec_u8(&dict["info"])?;
-                Digest::update(&mut hasher, info);
-                let hashed_data  = hasher.finalize().to_vec();
-                println!("Info Hash: {}", hashed_data.iter().map(|byte| format!("{:02x}", byte)).collect::<String>());
-            }
+            println!("Hashed data: {}", torrent_info.raw().info_hash()?);
             println!("Piece Length: {}", torrent_info.info.piece_length);
-            let piece_hashes: Vec<String> = torrent_info.info.pieces
-                .chunks(20)
-                .map(|chunk| chunk.iter().map(|byte| format!("{:02x}", byte)).collect::<String>())
-                .collect();
-            println!("Piece Hashes:\n{}", piece_hashes.join("\n"));
+            println!("Piece Hashes:\n{}", torrent_info.info.hashes().join("\n"));
         } else {
             println!("unknown command: {}", args[1])
         }
