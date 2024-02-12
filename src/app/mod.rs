@@ -60,11 +60,9 @@ pub fn entrypoint(args: Vec<String>) -> Result<()> {
             let mut hasher = Sha1::new();
             if let bencode::Dict(dict) = &data {
                 let info = bencode::to_vec_u8(&dict["info"])?;
-                // hasher.update(info);
                 Digest::update(&mut hasher, info);
                 let hashed_data  = hasher.finalize().to_vec();
-
-                println!("Hashed data: {}", hashed_data.iter().map(|byte| format!("{:02x}", byte)).collect::<String>());
+                println!("Info Hash: {}", hashed_data.iter().map(|byte| format!("{:02x}", byte)).collect::<String>());
             }
         } else {
             println!("unknown command: {}", args[1])

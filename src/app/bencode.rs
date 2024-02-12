@@ -195,50 +195,35 @@ pub fn to_string(value: &Value) -> Result<String> {
 
 fn blist_to_vec_u8(values: &Vec<Value>) -> Result<Vec<u8>> {
     let mut output:Vec<u8> = "".as_bytes().to_owned();
-    output.push(b'[');
+    output.push(b'l');
     for (i, value) in values.iter().enumerate() {
-        let v = &to_vec_u8(value)?;
-        output.extend_from_slice(v);
-        if i != values.len() - 1 {
-            output.push(b',');
-        }
+        output.extend_from_slice(&to_vec_u8(value)?);
     }
-    output.push(b']');
+    output.push(b'e');
     Ok(output)
 }
 #[allow(dead_code)]
 fn bdict_to_vecu8(values: &HashMap<String, Value>) -> Result<Vec<u8>> {
     let mut output = "".as_bytes().to_owned();
-    output.push(b'{');
+    output.push(b'd');
     let mut sorted_keys = Vec::<String>::new();
     for (key, _) in values.iter() {
         sorted_keys.push(key.to_owned());
     }
     sorted_keys.sort();
     for (i, key) in sorted_keys.iter().enumerate() {
-        output.extend_from_slice(b"\"");
+        output.extend_from_slice(format!("{:?}:", key.len()).as_bytes());
         output.extend_from_slice(key.as_bytes());
-        output.extend_from_slice(b"\":");
-        let v = to_vec_u8(&values[key])?;
-        output.extend_from_slice(&v);
-        if i != values.len() - 1 {
-            output.push(b',');
-        }
+        output.extend_from_slice(&to_vec_u8(&values[key])?);
     }
-    output.push(b'}');
+    output.push(b'e');
     Ok(output)
 }
 
 pub fn to_vec_u8(value: &Value) -> Result<Vec<u8>> {
     Ok(match value {
-        Int(x) => format!("{:?}", x).as_bytes().to_owned(),
-        Str(s) => {
-            let mut output = "".as_bytes().to_owned();
-            output.push(b'\"');
-            output.extend_from_slice(s);
-            output.push(b'\"');
-            output
-        },
+        Int(x) => format!("i{:?}e", x).as_bytes().to_owned(),
+        Str(s) => [format!("{:?}:", s.len()).as_bytes(), s].concat(),
         List(list) => blist_to_vec_u8(&list)?,
         Dict(values) => bdict_to_vecu8(&values)?,
     }.to_owned())
