@@ -20,18 +20,21 @@ fn decode_bencoded_value(value: &str) -> Result<String> {
 }
 
 fn no_args() -> Result<()> {
-    let path = "sample.torrent";
+    let path = "congratulations.gif.torrent";
     let _content = read_binary_file(path)?;
     let data = bencode::decode(&_content)?;
 
     let torrent_info = MetaData::new(data)?;
-    println!("{:#?}", torrent_info);
+    //println!("{:#?}", torrent_info);
     println!("Tracker URL: {}", torrent_info.announce);
     println!("Length: {}", torrent_info.info.length);
     println!("Hashed data: {}", torrent_info.raw().info_hash()?);
     println!("Piece Length: {}", torrent_info.info.piece_length);
     println!("Piece Hashes:\n{}", torrent_info.info.hashes().join("\n"));
     let peers = discover_peers(&torrent_info)?;
+    for (ip, port) in peers {
+        println!("{}:{}", ip, port);
+    }
     Ok(())
 }
 
@@ -52,9 +55,18 @@ pub fn entrypoint(args: Vec<String>) -> Result<()> {
             let torrent_info = MetaData::new(data.clone())?;
             println!("Tracker URL: {}", torrent_info.announce);
             println!("Length: {}", torrent_info.info.length);
-            println!("Hashed data: {}", torrent_info.raw().info_hash()?);
+            println!("Info Hash: {}", torrent_info.raw().info_hash()?);
             println!("Piece Length: {}", torrent_info.info.piece_length);
             println!("Piece Hashes:\n{}", torrent_info.info.hashes().join("\n"));
+        } else if command == "peers" {
+            let path = &args[2];
+            let _content = read_binary_file(path)?;
+            let data =  bencode::decode(&_content)?;
+            let torrent_info = MetaData::new(data.clone())?;
+            let peers = discover_peers(&torrent_info)?;
+            for (ip, port) in peers {
+                println!("{}:{}", ip, port);
+            }
         } else {
             println!("unknown command: {}", args[1])
         }

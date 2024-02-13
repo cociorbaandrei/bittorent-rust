@@ -53,7 +53,7 @@ fn parse_int(buffer: &[u8], start: &mut usize) -> Result<Value> {
 
 fn parse_str(buffer: &[u8], start: &mut usize) -> Result<Value> {
     let input = &buffer[*start..];
-    println!("{:#?}", input);
+    //println!("{:#?}", input);
     let delimiter = input
         .iter()
         .position(|&c| c == b':')
@@ -64,10 +64,10 @@ fn parse_str(buffer: &[u8], start: &mut usize) -> Result<Value> {
         .parse::<usize>()
         .map_err(|_| anyhow!("Failed to parse size length into usize"))?;
     let s = &input[delimiter + 1..delimiter + 1 + len];
-    println!("{:#?}", &buffer[*start..]);
+   // println!("{:#?}", &buffer[*start..]);
     *start +=  delimiter + 1 + len;
 
-    println!("{:#?}", &buffer[*start..]);
+    //println!("{:#?}", &buffer[*start..]);
     Ok(Value::Str(s.to_owned()))
 }
 
@@ -93,9 +93,9 @@ fn parse_dict(buffer: &[u8], start: &mut usize) -> Result<Value> {
         let mut map: HashMap<String, Value> = HashMap::new();
         while buffer.get(*start) != Some(&b'e') {
             if let Str(key) = parse_bencode(buffer, start)? {
-                let value = parse_bencode(buffer, start)?;
                 let utf8_key = std::str::from_utf8(&key)
                     .map_err(|_| anyhow!("Failed to parse map key as valid utf-8."))?;
+                let value = parse_bencode(buffer, start)?;
                 map.insert(utf8_key.to_owned(), value);
             }
         }
