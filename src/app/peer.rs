@@ -10,7 +10,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::app::network::discover_peers;
 use crate::app::tracker::MetaData;
 
-
+use tokio::fs::OpenOptions;
+use tokio::io::{AsyncSeekExt};
 pub struct PeerManager {
     peers: Vec<(String, u16)>,
     pub torrent: MetaData,
@@ -50,6 +51,27 @@ impl PeerManager{
 
 
 }
+
+pub(crate) async fn write_at_offset(file_path: &str, offset: u64, data: &[u8]) -> io::Result<()> {
+    // Open or create the file with write and read access
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(file_path)
+        .await?;
+
+    let mut file = file;
+
+    // Seek to the specified offset
+    file.seek(io::SeekFrom::Start(offset)).await?;
+
+    // Write data starting from the specified offset
+    file.write_all(data).await?;
+
+    Ok(())
+}
+
+
 pub async fn dispatch( message: BTMessage, stream: &mut TcpStream, torrent: &MetaData) -> Result<()>{
 
     match message {
@@ -95,7 +117,6 @@ pub async fn dispatch( message: BTMessage, stream: &mut TcpStream, torrent: &Met
                     let _ = stream.write_all(&r.serialize()?).await?;
                 }
             }
-
         },
         BTMessage::Interested => {},
         BTMessage::NotInterested => {},
@@ -107,6 +128,7 @@ pub async fn dispatch( message: BTMessage, stream: &mut TcpStream, torrent: &Met
         BTMessage::Request(idx, offset, length) => {},
         BTMessage::Piece(idx, offset, data) => {
             println!("Piece: {} {} {:?} ", idx, offset, data.len());
+            write_at_offset(&torrent.info.name,(idx*torrent.info.piece_length as u32 +offset )as u64, &data).await?;
         },
         BTMessage::Cancel(idx, offset, length) => {},
     };
@@ -120,7 +142,7 @@ async fn read_exact_bytes(mut stream: TcpStream, num_bytes: usize) -> Result<(Ve
 }
 
 
-pub(crate) async fn can_parse_message(buffer: &mut Vec<u8>) -> Result<Option<(u8, Vec<u8>)>> {
+pub(crate) async fn try_parse_message(buffer: &mut Vec<u8>) -> Result<Option<(u8, Vec<u8>)>> {
     if buffer.len() < 4 {
         // Not enough data to determine message length
         return Ok(None);
@@ -132,6 +154,7 @@ pub(crate) async fn can_parse_message(buffer: &mut Vec<u8>) -> Result<Option<(u8
     if (length_prefix as usize) + 4 <= buffer.len() {
         if buffer.len() == 4 {
             println!("Received keepalive message.");
+            buffer.drain(0..(4 + length_prefix as usize));
             return Ok(None);
         }
         let message_type = buffer[4];

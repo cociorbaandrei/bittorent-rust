@@ -1,10 +1,11 @@
 
 use std::fmt;
 use std::fmt::format;
-use tokio::io::{self, AsyncWriteExt};
+use tokio::io::{self, AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use anyhow::{anyhow, Result};
-use bytes::{BytesMut, BufMut};
+use bytes::{BytesMut, BufMut, Buf};
+use tokio_util::codec::{Decoder, Encoder, Framed};
 
 #[derive(Debug)]
 pub enum BTMessage {
@@ -19,6 +20,45 @@ pub enum BTMessage {
     Cancel(u32,u32,u32),
 }
 
+pub struct BTMessageFramer;
+
+impl Encoder<BTMessage> for BTMessageFramer{
+    type Error = anyhow::Error;
+    fn encode(&mut self, item: BTMessage, dst: &mut BytesMut) -> std::result::Result<(), Self::Error> {
+        let serialized = item.serialize()?;
+        dst.extend_from_slice(&serialized);
+        Ok(())
+    }
+}
+impl Decoder for BTMessageFramer{
+    type Item = BTMessage;
+    type Error = anyhow::Error;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
+        if src.len() < 4 {
+            // Not enough data to determine message length
+            return Ok(None);
+        }
+        // Determine if we have a complete message based on length prefix
+        let length_prefix = u32::from_be_bytes(src[0..4].try_into().unwrap());
+
+        if (length_prefix as usize) + 4 <= src.len() {
+            if src.len() == 4 {
+                println!("Received keepalive message.");
+                src.advance((4 + length_prefix as usize));
+                return Ok(None);
+            }
+            let message_type = src[4];
+            let payload = src[5..(4 + length_prefix as usize)].to_vec();
+
+            src.advance((4 + length_prefix as usize));
+            return Ok(Some(BTMessage::new(message_type, payload)?));
+        } else {
+            // Complete message not yet received
+            return Ok(None)
+        }
+    }
+}
 impl BTMessage {
     pub(crate) fn new(message_type: u8, payload: Vec<u8>) -> Result<Self> {
         let m : Option<BTMessage> = match message_type {

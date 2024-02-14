@@ -4,16 +4,19 @@ mod network;
 mod peer;
 mod messages;
 use futures::stream::StreamExt;
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, Context};
 use tokio::io::{ AsyncReadExt};
 use std::fs;
 use std::io::Read;
-use crate::app::messages::{BTMessage, Handshake};
+use futures::SinkExt;
+use crate::app::messages::{BTMessage, BTMessageFramer, Handshake};
 use crate::app::tracker::{MetaData};
 use crate::app::network::*;
 use crate::app::peer::{connect_to_peer, dispatch, PeerManager};
 use tokio::io::AsyncWriteExt;
-use crate::app::peer::can_parse_message;
+use tokio::net::TcpStream;
+use tokio_util::codec::Framed;
+use crate::app::peer::try_parse_message;
 
 fn read_binary_file(path: &str) -> Result<Vec<u8>> {
     let data = fs::read(path)?;
@@ -25,31 +28,138 @@ fn decode_bencoded_value(value: &str) -> Result<String> {
     let decoded = bencode::decode(buffer)?;
     return bencode::to_string(&decoded);
 }
+pub async fn download_piece(index: usize, torrent_info: &MetaData, peer: &mut Framed<TcpStream, BTMessageFramer>) -> Result<()>{
+    let block_size = 16 * 1024; // 16 KiB
+    let mut total_pieces = torrent_info.info.length  / torrent_info.info.piece_length;
+    if  torrent_info.info.length % torrent_info.info.piece_length > 0 {
+        total_pieces += 1;
+    }
+    let mut last_piece_size = torrent_info.info.length % torrent_info.info.piece_length;
+    if last_piece_size == 0 { // If the total size is a perfect multiple of the piece size
+        last_piece_size =  torrent_info.info.piece_length; // The last piece is a full piece
+    }
+    let mut number_of_blocks_in_last_piece = last_piece_size / block_size;
+    if (last_piece_size % block_size != 0) { // If there's a remainder
+        number_of_blocks_in_last_piece += 1; // There's an additional, partially-filled block
+    }
+    let mut size_of_last_block_in_last_piece = last_piece_size % block_size;
+    if (size_of_last_block_in_last_piece == 0 && last_piece_size != 0) {
+        size_of_last_block_in_last_piece = block_size; // The last block is a full block if no remainder
+    }
+    let i = index;
+    let piece_length= torrent_info.info.piece_length as u32;
+    const BLOCK_SIZE: u32 = 16 * 1024; // 16 KiB in bytes
+
+    let mut total_blocks = (piece_length as f32 / BLOCK_SIZE as f32).ceil() as u32;
+    if i == total_pieces as usize - 1usize {
+        total_blocks = number_of_blocks_in_last_piece as u32;
+    }
+
+    for block_index in 0..total_blocks {
+        let begin = block_index * BLOCK_SIZE;
+        let length = if block_index == total_blocks - 1 && i == total_pieces as usize - 1 {
+            // Last block, calculate remaining bytes
+            size_of_last_block_in_last_piece
+        } else {
+            // All blocks except the last one are of BLOCK_SIZE
+            BLOCK_SIZE as i64
+        };
+
+        let r =  BTMessage::Request(i as u32, begin, length as u32);
+        let _ = peer.send(r).await?;
+    }
+    Ok(())
+}
 
 async fn no_args() -> Result<()> {
-    let path = "congratulations.gif.torrent";
+    let path = "sample.torrent";
     let _content = read_binary_file(path)?;
     let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
 
-    let mut peer_manager = PeerManager::new(torrent_info).await?;
+    let mut peer_manager = PeerManager::new(torrent_info.clone()).await?;
     let mut stream = peer_manager.connect_to_peer().await?;
-    let mut buffer = Vec::new();
 
+    let mut peer = tokio_util::codec::Framed::new(stream, BTMessageFramer);
 
-    loop {
-        let mut chunk = vec![0u8; 4096]; // Adjust chunk size as necessary
-        let bytes_read = stream.read(&mut chunk).await?;
-        if bytes_read == 0 {
-            break;
-        }
-        chunk.truncate(bytes_read);
-        buffer.extend_from_slice(&chunk);
-
-        while let Some((message_type, payload)) = can_parse_message(&mut buffer).await? {
-            let message = BTMessage::new(message_type, payload)?;
-            dispatch(message, &mut stream, &peer_manager.torrent).await?;
+    while let Some(msg) = peer.next().await {
+        //println!("{:#?}", msg);
+        match msg? {
+            BTMessage::Choke => {}
+            BTMessage::Unchoke =>  {
+                download_piece(2, &torrent_info, &mut peer).await?;
+                // let block_size = 16 * 1024; // 16 KiB
+                // let mut total_pieces = torrent_info.info.length  / torrent_info.info.piece_length;
+                // if  torrent_info.info.length % torrent_info.info.piece_length > 0 {
+                //     total_pieces += 1;
+                // }
+                // let mut last_piece_size = torrent_info.info.length % torrent_info.info.piece_length;
+                // if last_piece_size == 0 { // If the total size is a perfect multiple of the piece size
+                //     last_piece_size =  torrent_info.info.piece_length; // The last piece is a full piece
+                // }
+                // let mut number_of_blocks_in_last_piece = last_piece_size / block_size;
+                // if (last_piece_size % block_size != 0) { // If there's a remainder
+                //     number_of_blocks_in_last_piece += 1; // There's an additional, partially-filled block
+                // }
+                // let mut size_of_last_block_in_last_piece = last_piece_size % block_size;
+                // if (size_of_last_block_in_last_piece == 0 && last_piece_size != 0) {
+                //     size_of_last_block_in_last_piece = block_size; // The last block is a full block if no remainder
+                // }
+                //
+                // for i in (0..total_pieces){
+                //     let piece_length= torrent_info.info.piece_length as u32;
+                //     const BLOCK_SIZE: u32 = 16 * 1024; // 16 KiB in bytes
+                //
+                //     let mut total_blocks = (piece_length as f32 / BLOCK_SIZE as f32).ceil() as u32;
+                //     if i == total_pieces - 1 {
+                //         total_blocks = number_of_blocks_in_last_piece as u32;
+                //     }
+                //
+                //     for block_index in 0..total_blocks {
+                //         let begin = block_index * BLOCK_SIZE;
+                //         let length = if block_index == total_blocks - 1 && i == total_pieces - 1 {
+                //             // Last block, calculate remaining bytes
+                //             size_of_last_block_in_last_piece
+                //         } else {
+                //             // All blocks except the last one are of BLOCK_SIZE
+                //             BLOCK_SIZE as i64
+                //         };
+                //
+                //         let r =  BTMessage::Request(i as u32, begin, length as u32);
+                //         let _ = peer.send(r).await?;
+                //     }
+                // }
+            },
+            BTMessage::Interested => {}
+            BTMessage::NotInterested => {}
+            BTMessage::Have(_) => {}
+            BTMessage::Bitfield(_) => {
+                let intr = BTMessage::Interested;
+                peer.send(intr).await?;
+            }
+            BTMessage::Request(_, _, _) => {}
+            BTMessage::Piece(idx, offset, data) => {
+                println!("Piece: {} {} {:?} ", idx, offset, data.len());
+                peer::write_at_offset(&torrent_info.info.name, (idx*torrent_info.info.piece_length as u32 +offset )as u64, &data).await?;
+            }
+            BTMessage::Cancel(_, _, _) => {}
         }
     }
+
+    // let mut buffer = Vec::new();
+    // loop {
+    //     let mut chunk = vec![0u8; 4096]; // Adjust chunk size as necessary
+    //     let bytes_read = stream.read(&mut chunk).await?;
+    //     if bytes_read == 0 {
+    //         break;
+    //     }
+    //     chunk.truncate(bytes_read);
+    //     buffer.extend_from_slice(&chunk);
+    //
+    //     while let Some((message_type, payload)) = try_parse_message(&mut buffer).await? {
+    //         let message = BTMessage::new(message_type, payload)?;
+    //         dispatch(message, &mut stream, &peer_manager.torrent).await?;
+    //     }
+    // }
 
     Ok(())
 
@@ -94,6 +204,8 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
             let handshake = Handshake::new(b"00112233445566778899", &torrent_info.raw().info_hash_u8()?);
             let (peer_ip, peer_port) = peers.iter().next().ok_or(anyhow!("Failed to get first peer"))?;
             connect_to_peer((peer_ip, *peer_port), handshake).await?;
+        } else if command == "download_piece" {
+
         } else {
             println!("unknown command: {}", args[1])
         }

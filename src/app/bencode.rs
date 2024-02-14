@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-use anyhow::{Result, anyhow};
-use sha1::{Digest, Sha1};
-pub use Value::{Dict, Int, List, Str};
 use crate::app::bencode;
-
+use anyhow::{anyhow, Result};
+use sha1::{Digest, Sha1};
+use std::collections::HashMap;
+pub use Value::{Dict, Int, List, Str};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -15,7 +14,11 @@ pub enum Value {
 
 impl Value {
     pub(crate) fn info_hash(&self) -> Result<String> {
-        Ok(self.info_hash_u8()?.iter().map(|byte| format!("{:02x}", byte)).collect::<String>())
+        Ok(self
+            .info_hash_u8()?
+            .iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect::<String>())
     }
 
     pub(crate) fn info_hash_u8(&self) -> Result<Vec<u8>> {
@@ -23,8 +26,8 @@ impl Value {
         if let bencode::Dict(dict) = self {
             let info = bencode::to_vec_u8(&dict["info"])?;
             Digest::update(&mut hasher, info);
-            let hashed_data  = hasher.finalize().to_vec();
-            return Ok(hashed_data)
+            let hashed_data = hasher.finalize().to_vec();
+            return Ok(hashed_data);
         }
         Err(anyhow!("Expected dictionary for info."))
     }
@@ -40,8 +43,8 @@ fn parse_int(buffer: &[u8], start: &mut usize) -> Result<Value> {
             + 1;
 
         let num = &buffer[*start + 1..end_pos];
-        let num_str =
-            std::str::from_utf8(num).map_err(|_|anyhow!("Failed to convert string length to utf-8."))?;
+        let num_str = std::str::from_utf8(num)
+            .map_err(|_| anyhow!("Failed to convert string length to utf-8."))?;
         let num = num_str
             .parse::<i64>()
             .map_err(|_| anyhow!("Failed to parse num_str as u64"))?;
@@ -55,18 +58,17 @@ fn parse_int(buffer: &[u8], start: &mut usize) -> Result<Value> {
 fn parse_str(buffer: &[u8], start: &mut usize) -> Result<Value> {
     let input = &buffer[*start..];
     //println!("{:#?}", input);
-    let delimiter = input
-        .iter()
-        .position(|&c| c == b':')
-        .ok_or(anyhow!("Expected to find delimiter : while parsing Vec<u8>."))?;
+    let delimiter = input.iter().position(|&c| c == b':').ok_or(anyhow!(
+        "Expected to find delimiter : while parsing Vec<u8>."
+    ))?;
 
     let len = std::str::from_utf8(&input[0..delimiter])
         .map_err(|_| anyhow!("Failed to interpred string length as utf-8."))?
         .parse::<usize>()
         .map_err(|_| anyhow!("Failed to parse size length into usize"))?;
     let s = &input[delimiter + 1..delimiter + 1 + len];
-   // println!("{:#?}", &buffer[*start..]);
-    *start +=  delimiter + 1 + len;
+    // println!("{:#?}", &buffer[*start..]);
+    *start += delimiter + 1 + len;
 
     //println!("{:#?}", &buffer[*start..]);
     Ok(Value::Str(s.to_owned()))
@@ -114,7 +116,10 @@ fn parse_bencode(buffer: &[u8], start: &mut usize) -> Result<Value> {
         Some(&c) if c.is_ascii_digit() => parse_str(buffer, start),
         Some(b'l') => parse_list(buffer, start),
         Some(b'd') => parse_dict(buffer, start),
-        _ => Err(anyhow!(format!("Invalid bencode format or unsupported bencode value while parsing: {:?}",std::str::from_utf8(&buffer[*start..])?))),
+        _ => Err(anyhow!(format!(
+            "Invalid bencode format or unsupported bencode value while parsing: {:?}",
+            std::str::from_utf8(&buffer[*start..])?
+        ))),
     }
 }
 
@@ -217,9 +222,8 @@ pub fn to_string(value: &Value) -> Result<String> {
     .to_owned())
 }
 
-
 fn blist_to_vec_u8(values: &Vec<Value>) -> Result<Vec<u8>> {
-    let mut output:Vec<u8> = "".as_bytes().to_owned();
+    let mut output: Vec<u8> = "".as_bytes().to_owned();
     output.push(b'l');
     for value in values.iter() {
         output.extend_from_slice(&to_vec_u8(value)?);
@@ -251,10 +255,9 @@ pub fn to_vec_u8(value: &Value) -> Result<Vec<u8>> {
         Str(s) => [format!("{:?}:", s.len()).as_bytes(), s].concat(),
         List(list) => blist_to_vec_u8(&list)?,
         Dict(values) => bdict_to_vecu8(&values)?,
-    }.to_owned())
+    }
+    .to_owned())
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -322,10 +325,7 @@ mod tests {
         let buffer = "lli42eei43eee";
         assert_eq!(
             decode(buffer.as_bytes()).unwrap(),
-            Value::List(vec![
-                Value::List(vec![Value::Int(42)]),
-                Value::Int(43)
-            ])
+            Value::List(vec![Value::List(vec![Value::Int(42)]), Value::Int(43)])
         );
     }
 
