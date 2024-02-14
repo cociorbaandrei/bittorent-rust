@@ -2,11 +2,9 @@ use crate::app::bencode;
 use crate::app::bencode::Value;
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
-use sha1::{Sha1, Digest};
-use sha1::digest::Update;
 
 #[allow(unused_imports)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MetaData {
     pub announce: String,
     pub info: Info,
@@ -43,7 +41,7 @@ impl MetaData {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Info {
     pub length: i64,
     pub name: String,

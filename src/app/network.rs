@@ -1,14 +1,9 @@
-use std::fmt::format;
-
 use crate::app::tracker::MetaData;
 use reqwest::blocking::get;
-use reqwest::Error;
-use url::{Url, ParseError};
-use hex;
+use url::{Url};
 use crate::app::bencode;
 use crate::app::bencode::Value;
 use anyhow::{Result, anyhow};
-use tokio::io::AsyncBufReadExt;
 
 // Define characters that do NOT require encoding
 fn urlencode(data: &[u8]) -> String {
@@ -38,7 +33,6 @@ pub(crate) fn discover_peers(torrent: &MetaData) -> Result<Vec<(String, u16)>> {
     let uploaded = "0";
     let downloaded = "0";
     let left = torrent.info.length.to_string(); // Assuming this is how you get the length
-    let compact = "1";
 
     let query = format!(
         "info_hash={}&peer_id={}&port={}&uploaded={}&downloaded={}&left={}&compact=1",
