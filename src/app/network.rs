@@ -1,5 +1,6 @@
 use crate::app::tracker::MetaData;
-use reqwest::blocking::get;
+use reqwest::get;
+use reqwest::Client;
 use url::{Url};
 use crate::app::bencode;
 use crate::app::bencode::Value;
@@ -22,7 +23,7 @@ fn urlencode(data: &[u8]) -> String {
     encoded
 }
 
-pub(crate) fn discover_peers(torrent: &MetaData) -> Result<Vec<(String, u16)>> {
+pub(crate) async  fn discover_peers(torrent: &MetaData) -> Result<Vec<(String, u16)>> {
     let announce = &torrent.announce;
     let mut url = Url::parse(announce)?;
     let encoded_hash = urlencode(&torrent.raw().info_hash_u8()?).to_string();
@@ -42,7 +43,10 @@ pub(crate) fn discover_peers(torrent: &MetaData) -> Result<Vec<(String, u16)>> {
     url.set_query(Some(&query));
 
    // println!("{:#?}", url);
-    let res = get(url)?.bytes()?;
+
+    let client = Client::new();
+    let res = client.get(url).send().await?.bytes().await?;
+   // let res = get(url)?.bytes()?;
    // println!("{:#?}", res);
    // println!("Started decoding response.");
     let decoded = bencode::decode(&res)?;
