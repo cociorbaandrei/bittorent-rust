@@ -47,7 +47,7 @@ async fn no_args() -> Result<()> {
 
         while let Some((message_type, payload)) = can_parse_message(&mut buffer).await? {
             let message = BTMessage::new(message_type, payload)?;
-            dispatch(message, &mut stream).await?;
+            dispatch(message, &mut stream, &peer_manager.torrent).await?;
         }
     }
 
