@@ -8,3 +8,11 @@ target/
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+Cargo.lock
+.idea/*
+.vscode/*
+.your_bittorrent.sh.swp
+congratulations.gif.torrent
+sample.txt
+test-piece-2
+test.txt
