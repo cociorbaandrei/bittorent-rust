@@ -200,7 +200,7 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
                 println!("{}:{}", ip, port);
             }
         } else if command == "handshake" {
-            let peer = &args[3];
+            let peer = args[3].split(":");
             let _content = read_binary_file(&args[2])?;
             let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
             let peers = discover_peers(&torrent_info).await?;
