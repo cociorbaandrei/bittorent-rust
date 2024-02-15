@@ -1,41 +1,46 @@
-use anyhow::{Result, anyhow};
-use tokio::net::TcpStream;
-use tokio::io::{self};
-use std::io::{Write, Read};
-use crate::app::messages::Handshake;
-use core::convert::TryInto;
 use crate::app::messages::BTMessage;
-use futures::stream::StreamExt;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use crate::app::messages::Handshake;
 use crate::app::network::discover_peers;
 use crate::app::tracker::MetaData;
+use anyhow::{anyhow, Result};
+use core::convert::TryInto;
+use futures::stream::StreamExt;
+use std::io::{Read, Write};
+use tokio::io::{self};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
 use tokio::fs::OpenOptions;
-use tokio::io::{AsyncSeekExt};
+use tokio::io::AsyncSeekExt;
 pub struct PeerManager {
     peers: Vec<(String, u16)>,
     pub torrent: MetaData,
-    handshake_received: bool
+    handshake_received: bool,
 }
 
-impl PeerManager{
-    pub(crate) async fn new(torrent : MetaData) -> Result<Self> {
+impl PeerManager {
+    pub(crate) async fn new(torrent: MetaData) -> Result<Self> {
         let peers = discover_peers(&torrent).await?;
-       // println!("Piece len {} total {}", torrent.info.piece_length, torrent.info.length);
-        Ok(Self{
+        // println!("Piece len {} total {}", torrent.info.piece_length, torrent.info.length);
+        Ok(Self {
             peers,
             torrent,
-            handshake_received: false
+            handshake_received: false,
         })
     }
 
     pub(crate) async fn connect_to_peer(&mut self) -> Result<TcpStream> {
-        let (peer_ip, peer_port) = self.peers.iter().next().ok_or(anyhow!("Failed to get first peer"))?;
-        let handshake = Handshake::new(b"00112233445566778899", &self.torrent.raw().info_hash_u8()?);
+        let (peer_ip, peer_port) = self
+            .peers
+            .iter()
+            .next()
+            .ok_or(anyhow!("Failed to get first peer"))?;
+        let handshake =
+            Handshake::new(b"00112233445566778899", &self.torrent.raw().info_hash_u8()?);
         let stream = connect_to_peer((peer_ip, *peer_port), handshake).await;
         let (data, stream) = read_exact_bytes(stream?, 68).await?;
         let peer_handshake = Handshake::deserialize(&data[..68]);
-       // println!("Received peer handshake: {}", peer_handshake);
+        // println!("Received peer handshake: {}", peer_handshake);
         println!("Peer ID: {}", peer_handshake.peer_id());
         self.handshake_received = true;
         Ok(stream)
@@ -48,8 +53,6 @@ impl PeerManager{
     pub(crate) async fn process_messages(&mut self) -> Result<()> {
         Ok(())
     }
-
-
 }
 
 pub(crate) async fn write_at_offset(file_path: &str, offset: u64, data: &[u8]) -> io::Result<()> {
@@ -71,23 +74,27 @@ pub(crate) async fn write_at_offset(file_path: &str, offset: u64, data: &[u8]) -
     Ok(())
 }
 
-
-pub async fn dispatch( message: BTMessage, stream: &mut TcpStream, torrent: &MetaData) -> Result<()>{
-
+pub async fn dispatch(
+    message: BTMessage,
+    stream: &mut TcpStream,
+    torrent: &MetaData,
+) -> Result<()> {
     match message {
-        BTMessage::Choke => {},
+        BTMessage::Choke => {}
         BTMessage::Unchoke => {
             let block_size = 16 * 1024; // 16 KiB
-            let mut total_pieces = torrent.info.length  / torrent.info.piece_length;
-            if  torrent.info.length % torrent.info.piece_length > 0 {
+            let mut total_pieces = torrent.info.length / torrent.info.piece_length;
+            if torrent.info.length % torrent.info.piece_length > 0 {
                 total_pieces += 1;
             }
             let mut last_piece_size = torrent.info.length % torrent.info.piece_length;
-            if last_piece_size == 0 { // If the total size is a perfect multiple of the piece size
-                last_piece_size =  torrent.info.piece_length; // The last piece is a full piece
+            if last_piece_size == 0 {
+                // If the total size is a perfect multiple of the piece size
+                last_piece_size = torrent.info.piece_length; // The last piece is a full piece
             }
             let mut number_of_blocks_in_last_piece = last_piece_size / block_size;
-            if last_piece_size % block_size != 0 { // If there's a remainder
+            if last_piece_size % block_size != 0 {
+                // If there's a remainder
                 number_of_blocks_in_last_piece += 1; // There's an additional, partially-filled block
             }
             let mut size_of_last_block_in_last_piece = last_piece_size % block_size;
@@ -95,7 +102,7 @@ pub async fn dispatch( message: BTMessage, stream: &mut TcpStream, torrent: &Met
                 size_of_last_block_in_last_piece = block_size; // The last block is a full block if no remainder
             }
             for i in 0..total_pieces {
-                let piece_length= torrent.info.piece_length as u32;
+                let piece_length = torrent.info.piece_length as u32;
                 const BLOCK_SIZE: u32 = 16 * 1024; // 16 KiB in bytes
 
                 let mut total_blocks = (piece_length as f32 / BLOCK_SIZE as f32).ceil() as u32;
@@ -113,24 +120,29 @@ pub async fn dispatch( message: BTMessage, stream: &mut TcpStream, torrent: &Met
                         BLOCK_SIZE as i64
                     };
 
-                    let r =  BTMessage::Request(i as u32, begin, length as u32);
+                    let r = BTMessage::Request(i as u32, begin, length as u32);
                     let _ = stream.write_all(&r.serialize()?).await?;
                 }
             }
-        },
-        BTMessage::Interested => {},
-        BTMessage::NotInterested => {},
-        BTMessage::Have(_piece) => {},
+        }
+        BTMessage::Interested => {}
+        BTMessage::NotInterested => {}
+        BTMessage::Have(_piece) => {}
         BTMessage::Bitfield(_bitfield) => {
             let intr = BTMessage::Interested;
             let _ = stream.write_all(&intr.serialize()?).await?;
-        },
-        BTMessage::Request(_idx, _offset, _length) => {},
+        }
+        BTMessage::Request(_idx, _offset, _length) => {}
         BTMessage::Piece(idx, offset, data) => {
             //println!("Piece: {} {} {:?} ", idx, offset, data.len());
-            write_at_offset(&torrent.info.name,(idx*torrent.info.piece_length as u32 +offset )as u64, &data).await?;
-        },
-        BTMessage::Cancel(_idx, _offset, _length) => {},
+            write_at_offset(
+                &torrent.info.name,
+                (idx * torrent.info.piece_length as u32 + offset) as u64,
+                &data,
+            )
+            .await?;
+        }
+        BTMessage::Cancel(_idx, _offset, _length) => {}
     };
     Ok(())
 }
@@ -141,7 +153,6 @@ async fn read_exact_bytes(mut stream: TcpStream, num_bytes: usize) -> Result<(Ve
     stream.read_exact(&mut buffer).await?;
     Ok((buffer, stream)) // Return both the buffer and the stream
 }
-
 
 pub(crate) async fn try_parse_message(buffer: &mut Vec<u8>) -> Result<Option<(u8, Vec<u8>)>> {
     if buffer.len() < 4 {
@@ -171,17 +182,17 @@ pub(crate) async fn try_parse_message(buffer: &mut Vec<u8>) -> Result<Option<(u8
     }
 }
 
-
-
-pub async fn connect_to_peer(peer: (&str, u16), handshake: Handshake) -> Result<TcpStream>{
+pub async fn connect_to_peer(peer: (&str, u16), handshake: Handshake) -> Result<TcpStream> {
     let (ip, port) = peer;
     let address = format!("{}:{}", ip, port);
-    let mut stream = TcpStream::connect(&address).await
+    let mut stream = TcpStream::connect(&address)
+        .await
         .map_err(|e| anyhow!("Failed to connect to peer {}: {}", address, e))?;
     let bytes = &handshake.serialize();
-    stream.write_all(&bytes).await
+    stream
+        .write_all(&bytes)
+        .await
         .map_err(|e| anyhow!("Failed to write handshake to peer {}: {}", address, e))?;
-
 
     Ok(stream)
 }

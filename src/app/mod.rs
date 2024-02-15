@@ -174,6 +174,7 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
     if args.len() < 2 {
         let _ = no_args().await?;
         println!("{}", &args[0]);
+        println!("{}", &args[1]);
     } else {
         let command = &args[1];// &args[1];
         if command == "decode" {
@@ -200,13 +201,16 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
                 println!("{}:{}", ip, port);
             }
         } else if command == "handshake" {
-            let _peer = args[3].split(":");
+            let _peer = &args[3];
             let _content = read_binary_file(&args[2])?;
             let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
             let peers = discover_peers(&torrent_info).await?;
             let handshake = Handshake::new(b"00112233445566778899", &torrent_info.raw().info_hash_u8()?);
-            let (peer_ip, peer_port) = peers.iter().next().ok_or(anyhow!("Failed to get first peer"))?;
-            connect_to_peer((peer_ip, *peer_port), handshake).await?;
+           // let (peer_ip, peer_port) = peers.iter().next().ok_or(anyhow!("Failed to get first peer"))?;
+            let mut p = _peer.split(":");
+            let peer_ip = p.next().unwrap();
+            let peer_port =  p.next().unwrap().parse::<u16>()?;
+            connect_to_peer((peer_ip, peer_port), handshake).await?;
         }
         else if command == "download_piece" {
             println!("no args {} {:#?}", args.len(), args);
