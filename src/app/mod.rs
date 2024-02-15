@@ -8,6 +8,7 @@ use anyhow::{Result, anyhow, Context};
 use tokio::io::{ AsyncReadExt};
 use std::fs;
 use std::io::Read;
+use clap::arg;
 use futures::SinkExt;
 use crate::app::messages::{BTMessage, BTMessageFramer, Handshake};
 use crate::app::tracker::{MetaData};
@@ -211,6 +212,7 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
             connect_to_peer((peer_ip, *peer_port), handshake).await?;
         }
         else if command == "download_piece" {
+            println!("no args {} {:#?}", args.len(), args);
             println!("file_name: {}, _content {}", &args[3], &args[4]);
             let file_name = &args[3];
             let _content = read_binary_file(&args[3])?;
