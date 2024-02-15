@@ -200,7 +200,7 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
             for (ip, port) in peers.iter() {
                 println!("{}:{}", ip, port);
             }
-        } else if command == ":" {
+        } else if command == "handshake" {
             let _peer = &args[3];
             println!("peer: {}", _peer);
             let _content = read_binary_file(&args[2])?;
