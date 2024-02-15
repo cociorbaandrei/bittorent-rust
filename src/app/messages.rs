@@ -45,7 +45,7 @@ impl Decoder for BTMessageFramer{
         if (length_prefix as usize) + 4 <= src.len() {
             if src.len() == 4 {
                 println!("Received keepalive message.");
-                src.advance((4 + length_prefix as usize));
+                src.advance(4 + length_prefix as usize);
                 return Ok(None);
             }
             let message_type = src[4];

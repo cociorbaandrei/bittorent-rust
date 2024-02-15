@@ -172,9 +172,12 @@ async fn no_args() -> Result<()> {
 pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
     if args.len() < 2 {
         let _ = no_args().await?;
+        println!("{}", &args[0]);
     } else {
-        let command = &args[1];
 
+
+        let command = "download_piece";// &args[1];
+        println!("{command}");
         if command == "decode" {
             let encoded_value = &args[2];
             let decoded_value = decode_bencoded_value(encoded_value)?;
@@ -206,15 +209,15 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
             let handshake = Handshake::new(b"00112233445566778899", &torrent_info.raw().info_hash_u8()?);
             let (peer_ip, peer_port) = peers.iter().next().ok_or(anyhow!("Failed to get first peer"))?;
             connect_to_peer((peer_ip, *peer_port), handshake).await?;
-        } else if command == "download_piece" {
+        }
+        else if command == "download_piece" {
+            println!("file_name: {}, _content {}", &args[3], &args[4]);
             let file_name = &args[3];
-            let _content = read_binary_file(&args[4])?;
-            let piece_number = &args[5].parse::<u64>()?;
+            let _content = read_binary_file(&args[3])?;
+            let piece_number = &args[4].parse::<u64>()?;
             let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
             let peers = discover_peers(&torrent_info).await?;
             let handshake = Handshake::new(b"00112233445566778899", &torrent_info.raw().info_hash_u8()?);
-            let (peer_ip, peer_port) = peers.iter().next().ok_or(anyhow!("Failed to get first peer"))?;
-
             let mut peer_manager = PeerManager::new(torrent_info.clone()).await?;
             let mut stream = peer_manager.connect_to_peer().await?;
 
