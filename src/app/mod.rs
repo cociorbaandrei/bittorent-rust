@@ -207,11 +207,12 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
             let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
             let peers = discover_peers(&torrent_info).await?;
             let handshake = Handshake::new(b"00112233445566778899", &torrent_info.raw().info_hash_u8()?);
+            let mut peer_manager = PeerManager::new(torrent_info.clone()).await?;
            // let (peer_ip, peer_port) = peers.iter().next().ok_or(anyhow!("Failed to get first peer"))?;
             let mut p = _peer.split(":");
             let peer_ip = p.next().unwrap();
             let peer_port =  p.next().unwrap().parse::<u16>()?;
-            connect_to_peer((peer_ip, peer_port), handshake).await?;
+            let stream = peer_manager.connect_to_peer().await?;
         }
         else if command == "download_piece" {
             println!("no args {} {:#?}", args.len(), args);

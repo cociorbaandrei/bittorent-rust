@@ -40,7 +40,7 @@ impl PeerManager {
         let stream = connect_to_peer((peer_ip, *peer_port), handshake).await;
         let (data, stream) = read_exact_bytes(stream?, 68).await?;
         let peer_handshake = Handshake::deserialize(&data[..68]);
-        // println!("Received peer handshake: {}", peer_handshake);
+        //println!("Received peer handshake: {}", peer_handshake);
         println!("Peer ID: {}", peer_handshake.peer_id());
         self.handshake_received = true;
         Ok(stream)
