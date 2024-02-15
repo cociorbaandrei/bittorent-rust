@@ -140,7 +140,7 @@ async fn no_args() -> Result<()> {
             }
             BTMessage::Request(_, _, _) => {}
             BTMessage::Piece(idx, offset, data) => {
-                println!("Piece: {} {} {:?} ", idx, offset, data.len());
+                //println!("Piece: {} {} {:?} ", idx, offset, data.len());
                 peer::write_at_offset(&torrent_info.info.name, (idx*torrent_info.info.piece_length as u32 +offset )as u64, &data).await?;
                 break;
             }
@@ -175,8 +175,6 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
         let _ = no_args().await?;
         println!("{}", &args[0]);
     } else {
-
-
         let command = &args[1];// &args[1];
         if command == "decode" {
             let encoded_value = &args[2];
@@ -281,7 +279,7 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
                     }
                     BTMessage::Request(_, _, _) => {}
                     BTMessage::Piece(idx, offset, data) => {
-                        println!("Piece: {} {} {:?} ", idx, offset, data.len());
+                       // println!("Piece: {} {} {:?} ", idx, offset, data.len());
                         peer::write_at_offset(&file_name, (idx*torrent_info.info.piece_length as u32 +offset )as u64, &data).await?;
                     }
                     BTMessage::Cancel(_, _, _) => {}

@@ -21,7 +21,7 @@ pub struct PeerManager {
 impl PeerManager{
     pub(crate) async fn new(torrent : MetaData) -> Result<Self> {
         let peers = discover_peers(&torrent).await?;
-        println!("Piece len {} total {}", torrent.info.piece_length, torrent.info.length);
+       // println!("Piece len {} total {}", torrent.info.piece_length, torrent.info.length);
         Ok(Self{
             peers,
             torrent,
@@ -35,7 +35,7 @@ impl PeerManager{
         let mut stream = connect_to_peer((peer_ip, *peer_port), handshake).await;
         let (data, stream) = read_exact_bytes(stream?, 68).await?;
         let peer_handshake = Handshake::deserialize(&data[..68]);
-        println!("Received peer handshake: {}", peer_handshake);
+       // println!("Received peer handshake: {}", peer_handshake);
         println!("Peer ID: {}", peer_handshake.peer_id());
         self.handshake_received = true;
         Ok(stream)
@@ -127,13 +127,14 @@ pub async fn dispatch( message: BTMessage, stream: &mut TcpStream, torrent: &Met
         },
         BTMessage::Request(idx, offset, length) => {},
         BTMessage::Piece(idx, offset, data) => {
-            println!("Piece: {} {} {:?} ", idx, offset, data.len());
+            //println!("Piece: {} {} {:?} ", idx, offset, data.len());
             write_at_offset(&torrent.info.name,(idx*torrent.info.piece_length as u32 +offset )as u64, &data).await?;
         },
         BTMessage::Cancel(idx, offset, length) => {},
     };
     Ok(())
 }
+
 // Now the function takes the stream by value and returns it along with the read data
 async fn read_exact_bytes(mut stream: TcpStream, num_bytes: usize) -> Result<(Vec<u8>, TcpStream)> {
     let mut buffer = vec![0u8; num_bytes];
