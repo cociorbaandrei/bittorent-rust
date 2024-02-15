@@ -221,7 +221,7 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
             println!("file_name: {}, _content {}", &args[3], &args[4]);
             let file_name = &args[3];
             let _content = read_binary_file(&args[4])?;
-            let _piece_number = &args[5].parse::<u64>()?;
+            let _piece_number = &args[5].parse::<usize>()?;
             let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
             let _peers = discover_peers(&torrent_info).await?;
             let _handshake = Handshake::new(b"00112233445566778899", &torrent_info.raw().info_hash_u8()?);
@@ -235,7 +235,7 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
                 match msg? {
                     BTMessage::Choke => {}
                     BTMessage::Unchoke =>  {
-                        download_piece(0, &torrent_info, &mut peer, file_name).await?;
+                        download_piece(*_piece_number, &torrent_info, &mut peer, file_name).await?;
                     },
                     BTMessage::Interested => {}
                     BTMessage::NotInterested => {}
@@ -246,7 +246,7 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
                     }
                     BTMessage::Request(_, _, _) => {}
                     BTMessage::Piece(idx, offset, data) => {
-                        peer::write_at_offset(&file_name, (idx*torrent_info.info.piece_length as u32 +offset )as u64, &data).await?;
+                        peer::write_at_offset(&file_name, (0*torrent_info.info.piece_length as u32 +offset )as u64, &data).await?;
                         unsafe {
                             downloaded -= 1;
                             if(downloaded == 0){
