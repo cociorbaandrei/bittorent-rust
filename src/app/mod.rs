@@ -75,6 +75,53 @@ pub async fn download_piece(index: usize, torrent_info: &MetaData, peer: &mut Fr
     Ok(())
 }
 
+pub async fn download_pieces(index: usize, torrent_info: &MetaData, peer: &mut Framed<TcpStream, BTMessageFramer>, _file_name: &str) -> Result<()>{
+    let block_size = 16 * 1024; // 16 KiB
+    let mut total_pieces = torrent_info.info.length  / torrent_info.info.piece_length;
+    if  torrent_info.info.length % torrent_info.info.piece_length > 0 {
+        total_pieces += 1;
+    }
+    let mut last_piece_size = torrent_info.info.length % torrent_info.info.piece_length;
+    if last_piece_size == 0 { // If the total size is a perfect multiple of the piece size
+        last_piece_size =  torrent_info.info.piece_length; // The last piece is a full piece
+    }
+    let mut number_of_blocks_in_last_piece = last_piece_size / block_size;
+    if last_piece_size % block_size != 0 { // If there's a remainder
+        number_of_blocks_in_last_piece += 1; // There's an additional, partially-filled block
+    }
+    let mut size_of_last_block_in_last_piece = last_piece_size % block_size;
+    if size_of_last_block_in_last_piece == 0 && last_piece_size != 0 {
+        size_of_last_block_in_last_piece = block_size; // The last block is a full block if no remainder
+    }
+    for i in (0..total_pieces) {
+        let piece_length = torrent_info.info.piece_length as u32;
+        const BLOCK_SIZE: u32 = 16 * 1024; // 16 KiB in bytes
+
+        let mut total_blocks = (piece_length as f32 / BLOCK_SIZE as f32).ceil() as u32;
+        if i as usize == total_pieces as usize - 1usize {
+            total_blocks = number_of_blocks_in_last_piece as u32;
+        }
+
+        for block_index in 0..total_blocks {
+            let begin = block_index * BLOCK_SIZE;
+            let length = if block_index == total_blocks - 1 && i as usize == total_pieces as usize - 1 {
+                // Last block, calculate remaining bytes
+                size_of_last_block_in_last_piece
+            } else {
+                // All blocks except the last one are of BLOCK_SIZE
+                BLOCK_SIZE as i64
+            };
+
+            let r = BTMessage::Request(i as u32, begin, length as u32);
+            let _ = peer.send(r).await?;
+            unsafe {
+                downloaded += 1;
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn no_args() -> Result<()> {
 
     let path = "sample.torrent";
@@ -91,7 +138,7 @@ async fn no_args() -> Result<()> {
         match msg? {
             BTMessage::Choke => {}
             BTMessage::Unchoke =>  {
-                download_piece(0, &torrent_info, &mut peer, "sample.txt").await?;
+                download_pieces(0, &torrent_info, &mut peer, "sample.txt").await?;
                 // let block_size = 16 * 1024; // 16 KiB
                 // let mut total_pieces = torrent_info.info.length  / torrent_info.info.piece_length;
                 // if  torrent_info.info.length % torrent_info.info.piece_length > 0 {
@@ -259,7 +306,51 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
                 }
             }
 
-        } else {
+        }else if command == "download" {
+            println!("no args {} {:#?}", args.len(), args);
+            println!("file_name: {}, _content {}", &args[3], &args[4]);
+            let file_name = &args[3];
+            let _content = read_binary_file(&args[4])?;
+            let _piece_number = 0;
+            let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
+            let _peers = discover_peers(&torrent_info).await?;
+            let _handshake = Handshake::new(b"00112233445566778899", &torrent_info.raw().info_hash_u8()?);
+            let mut peer_manager = PeerManager::new(torrent_info.clone()).await?;
+            let stream = peer_manager.connect_to_peer().await?;
+
+            let mut peer = tokio_util::codec::Framed::new(stream, BTMessageFramer);
+
+            while let Some(msg) = peer.next().await {
+                //println!("{:#?}", msg);
+                match msg? {
+                    BTMessage::Choke => {}
+                    BTMessage::Unchoke =>  {
+                        download_pieces(_piece_number, &torrent_info, &mut peer, file_name).await?;
+                    },
+                    BTMessage::Interested => {}
+                    BTMessage::NotInterested => {}
+                    BTMessage::Have(_) => {}
+                    BTMessage::Bitfield(_) => {
+                        let intr = BTMessage::Interested;
+                        peer.send(intr).await?;
+                    }
+                    BTMessage::Request(_, _, _) => {}
+                    BTMessage::Piece(idx, offset, data) => {
+                        peer::write_at_offset(&file_name, (idx*torrent_info.info.piece_length as u32 +offset )as u64, &data).await?;
+                        unsafe {
+                            downloaded -= 1;
+                            if(downloaded == 0){
+                                break;
+                            }
+                        }
+
+                    }
+                    BTMessage::Cancel(_, _, _) => {}
+                }
+            }
+
+        }
+        else {
             println!("unknown command: {}", args[1])
         }
     }
