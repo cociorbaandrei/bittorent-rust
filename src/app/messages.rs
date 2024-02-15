@@ -53,10 +53,10 @@ impl Decoder for BTMessageFramer {
             let payload = src[5..(4 + length_prefix as usize)].to_vec();
 
             src.advance(4 + length_prefix as usize);
-            return Ok(Some(BTMessage::new(message_type, payload)?));
+            Ok(Some(BTMessage::new(message_type, payload)?))
         } else {
             // Complete message not yet received
-            return Ok(None);
+            Ok(None)
         }
     }
 }

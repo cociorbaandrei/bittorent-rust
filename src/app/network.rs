@@ -63,7 +63,7 @@ pub(crate) async fn discover_peers(torrent: &MetaData) -> Result<Vec<(String, u1
                         .map(|chunk| {
                             let ip =
                                 format!("{}.{}.{}.{}", &chunk[0], &chunk[1], &chunk[2], &chunk[3]);
-                            let port: u16 = (chunk[5] as u16 | ((chunk[4] as u16) << 8u16)).into();
+                            let port: u16 = chunk[5] as u16 | ((chunk[4] as u16) << 8u16);
                             (ip, port)
                         })
                         .collect();

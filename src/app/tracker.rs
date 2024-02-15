@@ -28,7 +28,7 @@ impl MetaData {
                 let info = map
                     .get("info")
                     .and_then(|info| match info {
-                        Value::Dict(info_dict) => Some(Info::new(&info_dict)),
+                        Value::Dict(info_dict) => Some(Info::new(info_dict)),
                         _ => None,
                     })
                     .ok_or(anyhow!("Missing or invalid 'info'"))??;
@@ -110,6 +110,6 @@ impl Info {
                     .collect::<String>()
             })
             .collect();
-        return piece_hashes;
+        piece_hashes
     }
 }

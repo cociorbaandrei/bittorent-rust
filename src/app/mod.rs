@@ -3,14 +3,14 @@ mod messages;
 mod network;
 mod peer;
 mod tracker;
-use anyhow::{anyhow, Result};
+use anyhow::{Result};
 use futures::stream::StreamExt;
 
 use std::fs;
 
 use crate::app::messages::{BTMessage, BTMessageFramer, Handshake};
 use crate::app::network::*;
-use crate::app::peer::{connect_to_peer, PeerManager};
+use crate::app::peer::{PeerManager};
 use crate::app::tracker::MetaData;
 use futures::SinkExt;
 
@@ -26,7 +26,7 @@ fn read_binary_file(path: &str) -> Result<Vec<u8>> {
 fn decode_bencoded_value(value: &str) -> Result<String> {
     let buffer = value.as_bytes();
     let decoded = bencode::decode(buffer)?;
-    return bencode::to_string(&decoded);
+    bencode::to_string(&decoded)
 }
 pub async fn download_piece(
     index: usize,
@@ -73,7 +73,7 @@ pub async fn download_piece(
         };
 
         let r = BTMessage::Request(i as u32, begin, length as u32);
-        let _ = peer.send(r).await?;
+        peer.send(r).await?;
         unsafe {
             downloaded += 1;
         }
@@ -82,7 +82,7 @@ pub async fn download_piece(
 }
 
 pub async fn download_pieces(
-    index: usize,
+    _index: usize,
     torrent_info: &MetaData,
     peer: &mut Framed<TcpStream, BTMessageFramer>,
     _file_name: &str,
@@ -106,7 +106,7 @@ pub async fn download_pieces(
     if size_of_last_block_in_last_piece == 0 && last_piece_size != 0 {
         size_of_last_block_in_last_piece = block_size; // The last block is a full block if no remainder
     }
-    for i in (0..total_pieces) {
+    for i in 0..total_pieces {
         let piece_length = torrent_info.info.piece_length as u32;
         const BLOCK_SIZE: u32 = 16 * 1024; // 16 KiB in bytes
 
@@ -127,7 +127,7 @@ pub async fn download_pieces(
                 };
 
             let r = BTMessage::Request(i as u32, begin, length as u32);
-            let _ = peer.send(r).await?;
+            peer.send(r).await?;
             unsafe {
                 downloaded += 1;
             }
@@ -180,7 +180,7 @@ async fn no_args() -> Result<()> {
 
 pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
     if args.len() < 2 {
-        let _ = no_args().await?;
+        no_args().await?;
         println!("{}", &args[0]);
     } else {
         let command = &args[1]; // &args[1];
@@ -212,15 +212,15 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
             println!("peer: {}", _peer);
             let _content = read_binary_file(&args[2])?;
             let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
-            let peers = discover_peers(&torrent_info).await?;
-            let handshake =
+            let _peers = discover_peers(&torrent_info).await?;
+            let _handshake =
                 Handshake::new(b"00112233445566778899", &torrent_info.raw().info_hash_u8()?);
             let mut peer_manager = PeerManager::new(torrent_info.clone()).await?;
             // let (peer_ip, peer_port) = peers.iter().next().ok_or(anyhow!("Failed to get first peer"))?;
-            let mut p = _peer.split(":");
-            let peer_ip = p.next().unwrap();
-            let peer_port = p.next().unwrap().parse::<u16>()?;
-            let stream = peer_manager.connect_to_peer().await?;
+            let mut p = _peer.split(':');
+            let _peer_ip = p.next().unwrap();
+            let _peer_port = p.next().unwrap().parse::<u16>()?;
+            let _stream = peer_manager.connect_to_peer().await?;
         } else if command == "download_piece" {
             println!("no args {} {:#?}", args.len(), args);
             println!("file_name: {}, _content {}", &args[3], &args[4]);
@@ -251,16 +251,16 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
                         peer.send(intr).await?;
                     }
                     BTMessage::Request(_, _, _) => {}
-                    BTMessage::Piece(idx, offset, data) => {
+                    BTMessage::Piece(_idx, offset, data) => {
                         peer::write_at_offset(
-                            &file_name,
+                            file_name,
                             (0 * torrent_info.info.piece_length as u32 + offset) as u64,
                             &data,
                         )
                         .await?;
                         unsafe {
                             downloaded -= 1;
-                            if (downloaded == 0) {
+                            if downloaded == 0 {
                                 break;
                             }
                         }
@@ -300,14 +300,14 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
                     BTMessage::Request(_, _, _) => {}
                     BTMessage::Piece(idx, offset, data) => {
                         peer::write_at_offset(
-                            &file_name,
+                            file_name,
                             (idx * torrent_info.info.piece_length as u32 + offset) as u64,
                             &data,
                         )
                         .await?;
                         unsafe {
                             downloaded -= 1;
-                            if (downloaded == 0) {
+                            if downloaded == 0 {
                                 break;
                             }
                         }

@@ -4,7 +4,7 @@ use crate::app::network::discover_peers;
 use crate::app::tracker::MetaData;
 use anyhow::{anyhow, Result};
 use core::convert::TryInto;
-use futures::stream::StreamExt;
+
 use std::io::{Read, Write};
 use tokio::io::{self};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -32,8 +32,7 @@ impl PeerManager {
     pub(crate) async fn connect_to_peer(&mut self) -> Result<TcpStream> {
         let (peer_ip, peer_port) = self
             .peers
-            .iter()
-            .next()
+            .first()
             .ok_or(anyhow!("Failed to get first peer"))?;
         let handshake =
             Handshake::new(b"00112233445566778899", &self.torrent.raw().info_hash_u8()?);
@@ -121,7 +120,7 @@ pub async fn dispatch(
                     };
 
                     let r = BTMessage::Request(i as u32, begin, length as u32);
-                    let _ = stream.write_all(&r.serialize()?).await?;
+                    stream.write_all(&r.serialize()?).await?;
                 }
             }
         }
@@ -130,7 +129,7 @@ pub async fn dispatch(
         BTMessage::Have(_piece) => {}
         BTMessage::Bitfield(_bitfield) => {
             let intr = BTMessage::Interested;
-            let _ = stream.write_all(&intr.serialize()?).await?;
+            stream.write_all(&intr.serialize()?).await?;
         }
         BTMessage::Request(_idx, _offset, _length) => {}
         BTMessage::Piece(idx, offset, data) => {
@@ -190,7 +189,7 @@ pub async fn connect_to_peer(peer: (&str, u16), handshake: Handshake) -> Result<
         .map_err(|e| anyhow!("Failed to connect to peer {}: {}", address, e))?;
     let bytes = &handshake.serialize();
     stream
-        .write_all(&bytes)
+        .write_all(bytes)
         .await
         .map_err(|e| anyhow!("Failed to write handshake to peer {}: {}", address, e))?;
 

@@ -86,7 +86,7 @@ fn parse_list(buffer: &[u8], start: &mut usize) -> Result<Value> {
 
         Ok(Value::List(list))
     } else {
-        return Err(anyhow!("expected list to start with l"));
+        Err(anyhow!("expected list to start with l"))
     }
 }
 
@@ -106,7 +106,7 @@ fn parse_dict(buffer: &[u8], start: &mut usize) -> Result<Value> {
 
         Ok(Dict(map))
     } else {
-        return Err(anyhow!("expected list to start with d"));
+        Err(anyhow!("expected list to start with d"))
     }
 }
 
@@ -216,8 +216,8 @@ pub fn to_string(value: &Value) -> Result<String> {
             "{:?}",
             std::str::from_utf8(s).map_err(|_| anyhow!("Error converting bytes to utf-8"))?
         ),
-        List(list) => blist_to_string(&list)?,
-        Dict(values) => bdict_to_string(&values)?,
+        List(list) => blist_to_string(list)?,
+        Dict(values) => bdict_to_string(values)?,
     }
     .to_owned())
 }
@@ -253,8 +253,8 @@ pub fn to_vec_u8(value: &Value) -> Result<Vec<u8>> {
     Ok(match value {
         Int(x) => format!("i{:?}e", x).as_bytes().to_owned(),
         Str(s) => [format!("{:?}:", s.len()).as_bytes(), s].concat(),
-        List(list) => blist_to_vec_u8(&list)?,
-        Dict(values) => bdict_to_vecu8(&values)?,
+        List(list) => blist_to_vec_u8(list)?,
+        Dict(values) => bdict_to_vecu8(values)?,
     }
     .to_owned())
 }
