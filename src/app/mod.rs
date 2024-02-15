@@ -3,21 +3,21 @@ mod messages;
 mod network;
 mod peer;
 mod tracker;
-use anyhow::{Result};
+use anyhow::Result;
 use futures::stream::StreamExt;
 
 use std::fs;
 
 use crate::app::messages::{BTMessage, BTMessageFramer, Handshake};
 use crate::app::network::*;
-use crate::app::peer::{PeerManager};
+use crate::app::peer::PeerManager;
 use crate::app::tracker::MetaData;
 use futures::SinkExt;
 
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 
-static mut downloaded: u64 = 0;
+static mut DOWNLOADED: u64 = 0;
 fn read_binary_file(path: &str) -> Result<Vec<u8>> {
     let data = fs::read(path)?;
     Ok(data)
@@ -75,7 +75,7 @@ pub async fn download_piece(
         let r = BTMessage::Request(i as u32, begin, length as u32);
         peer.send(r).await?;
         unsafe {
-            downloaded += 1;
+            DOWNLOADED += 1;
         }
     }
     Ok(())
@@ -129,7 +129,7 @@ pub async fn download_pieces(
             let r = BTMessage::Request(i as u32, begin, length as u32);
             peer.send(r).await?;
             unsafe {
-                downloaded += 1;
+                DOWNLOADED += 1;
             }
         }
     }
@@ -254,13 +254,13 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
                     BTMessage::Piece(_idx, offset, data) => {
                         peer::write_at_offset(
                             file_name,
-                            (0 * torrent_info.info.piece_length as u32 + offset) as u64,
+                            (offset) as u64,
                             &data,
                         )
                         .await?;
                         unsafe {
-                            downloaded -= 1;
-                            if downloaded == 0 {
+                            DOWNLOADED -= 1;
+                            if DOWNLOADED == 0 {
                                 break;
                             }
                         }
@@ -306,8 +306,8 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
                         )
                         .await?;
                         unsafe {
-                            downloaded -= 1;
-                            if downloaded == 0 {
+                            DOWNLOADED -= 1;
+                            if DOWNLOADED == 0 {
                                 break;
                             }
                         }
