@@ -4,20 +4,20 @@ mod network;
 mod peer;
 mod messages;
 use futures::stream::StreamExt;
-use anyhow::{Result, anyhow, Context};
-use tokio::io::{ AsyncReadExt};
+use anyhow::{Result, anyhow};
+
 use std::fs;
-use std::io::Read;
-use clap::arg;
+
+
 use futures::SinkExt;
 use crate::app::messages::{BTMessage, BTMessageFramer, Handshake};
 use crate::app::tracker::{MetaData};
 use crate::app::network::*;
-use crate::app::peer::{connect_to_peer, dispatch, PeerManager};
-use tokio::io::AsyncWriteExt;
+use crate::app::peer::{connect_to_peer, PeerManager};
+
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
-use crate::app::peer::try_parse_message;
+
 
 fn read_binary_file(path: &str) -> Result<Vec<u8>> {
     let data = fs::read(path)?;
@@ -29,7 +29,7 @@ fn decode_bencoded_value(value: &str) -> Result<String> {
     let decoded = bencode::decode(buffer)?;
     return bencode::to_string(&decoded);
 }
-pub async fn download_piece(index: usize, torrent_info: &MetaData, peer: &mut Framed<TcpStream, BTMessageFramer>, file_name: &str) -> Result<()>{
+pub async fn download_piece(index: usize, torrent_info: &MetaData, peer: &mut Framed<TcpStream, BTMessageFramer>, _file_name: &str) -> Result<()>{
     let block_size = 16 * 1024; // 16 KiB
     let mut total_pieces = torrent_info.info.length  / torrent_info.info.piece_length;
     if  torrent_info.info.length % torrent_info.info.piece_length > 0 {
@@ -40,11 +40,11 @@ pub async fn download_piece(index: usize, torrent_info: &MetaData, peer: &mut Fr
         last_piece_size =  torrent_info.info.piece_length; // The last piece is a full piece
     }
     let mut number_of_blocks_in_last_piece = last_piece_size / block_size;
-    if (last_piece_size % block_size != 0) { // If there's a remainder
+    if last_piece_size % block_size != 0 { // If there's a remainder
         number_of_blocks_in_last_piece += 1; // There's an additional, partially-filled block
     }
     let mut size_of_last_block_in_last_piece = last_piece_size % block_size;
-    if (size_of_last_block_in_last_piece == 0 && last_piece_size != 0) {
+    if size_of_last_block_in_last_piece == 0 && last_piece_size != 0 {
         size_of_last_block_in_last_piece = block_size; // The last block is a full block if no remainder
     }
     let i = index;
@@ -79,7 +79,7 @@ async fn no_args() -> Result<()> {
     let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
 
     let mut peer_manager = PeerManager::new(torrent_info.clone()).await?;
-    let mut stream = peer_manager.connect_to_peer().await?;
+    let stream = peer_manager.connect_to_peer().await?;
 
     let mut peer = tokio_util::codec::Framed::new(stream, BTMessageFramer);
 
@@ -200,7 +200,7 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
                 println!("{}:{}", ip, port);
             }
         } else if command == "handshake" {
-            let peer = args[3].split(":");
+            let _peer = args[3].split(":");
             let _content = read_binary_file(&args[2])?;
             let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
             let peers = discover_peers(&torrent_info).await?;
@@ -213,12 +213,12 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
             println!("file_name: {}, _content {}", &args[3], &args[4]);
             let file_name = &args[3];
             let _content = read_binary_file(&args[3])?;
-            let piece_number = &args[4].parse::<u64>()?;
+            let _piece_number = &args[4].parse::<u64>()?;
             let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
-            let peers = discover_peers(&torrent_info).await?;
-            let handshake = Handshake::new(b"00112233445566778899", &torrent_info.raw().info_hash_u8()?);
+            let _peers = discover_peers(&torrent_info).await?;
+            let _handshake = Handshake::new(b"00112233445566778899", &torrent_info.raw().info_hash_u8()?);
             let mut peer_manager = PeerManager::new(torrent_info.clone()).await?;
-            let mut stream = peer_manager.connect_to_peer().await?;
+            let stream = peer_manager.connect_to_peer().await?;
 
             let mut peer = tokio_util::codec::Framed::new(stream, BTMessageFramer);
 

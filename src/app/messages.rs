@@ -1,11 +1,11 @@
 
 use std::fmt;
-use std::fmt::format;
-use tokio::io::{self, AsyncRead, AsyncWrite, AsyncWriteExt};
-use tokio::net::TcpStream;
+
+
+
 use anyhow::{anyhow, Result};
 use bytes::{BytesMut, BufMut, Buf};
-use tokio_util::codec::{Decoder, Encoder, Framed};
+use tokio_util::codec::{Decoder, Encoder};
 
 #[derive(Debug)]
 pub enum BTMessage {
@@ -51,7 +51,7 @@ impl Decoder for BTMessageFramer{
             let message_type = src[4];
             let payload = src[5..(4 + length_prefix as usize)].to_vec();
 
-            src.advance((4 + length_prefix as usize));
+            src.advance(4 + length_prefix as usize);
             return Ok(Some(BTMessage::new(message_type, payload)?));
         } else {
             // Complete message not yet received

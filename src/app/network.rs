@@ -1,5 +1,5 @@
 use crate::app::tracker::MetaData;
-use reqwest::get;
+
 use reqwest::Client;
 use url::{Url};
 use crate::app::bencode;

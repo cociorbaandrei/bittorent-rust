@@ -32,7 +32,7 @@ impl PeerManager{
     pub(crate) async fn connect_to_peer(&mut self) -> Result<TcpStream> {
         let (peer_ip, peer_port) = self.peers.iter().next().ok_or(anyhow!("Failed to get first peer"))?;
         let handshake = Handshake::new(b"00112233445566778899", &self.torrent.raw().info_hash_u8()?);
-        let mut stream = connect_to_peer((peer_ip, *peer_port), handshake).await;
+        let stream = connect_to_peer((peer_ip, *peer_port), handshake).await;
         let (data, stream) = read_exact_bytes(stream?, 68).await?;
         let peer_handshake = Handshake::deserialize(&data[..68]);
        // println!("Received peer handshake: {}", peer_handshake);
@@ -87,14 +87,14 @@ pub async fn dispatch( message: BTMessage, stream: &mut TcpStream, torrent: &Met
                 last_piece_size =  torrent.info.piece_length; // The last piece is a full piece
             }
             let mut number_of_blocks_in_last_piece = last_piece_size / block_size;
-            if (last_piece_size % block_size != 0) { // If there's a remainder
+            if last_piece_size % block_size != 0 { // If there's a remainder
                 number_of_blocks_in_last_piece += 1; // There's an additional, partially-filled block
             }
             let mut size_of_last_block_in_last_piece = last_piece_size % block_size;
-            if (size_of_last_block_in_last_piece == 0 && last_piece_size != 0) {
+            if size_of_last_block_in_last_piece == 0 && last_piece_size != 0 {
                 size_of_last_block_in_last_piece = block_size; // The last block is a full block if no remainder
             }
-            for i in (0..total_pieces){
+            for i in 0..total_pieces {
                 let piece_length= torrent.info.piece_length as u32;
                 const BLOCK_SIZE: u32 = 16 * 1024; // 16 KiB in bytes
 
@@ -120,17 +120,17 @@ pub async fn dispatch( message: BTMessage, stream: &mut TcpStream, torrent: &Met
         },
         BTMessage::Interested => {},
         BTMessage::NotInterested => {},
-        BTMessage::Have(piece) => {},
-        BTMessage::Bitfield(bitfield) => {
+        BTMessage::Have(_piece) => {},
+        BTMessage::Bitfield(_bitfield) => {
             let intr = BTMessage::Interested;
             let _ = stream.write_all(&intr.serialize()?).await?;
         },
-        BTMessage::Request(idx, offset, length) => {},
+        BTMessage::Request(_idx, _offset, _length) => {},
         BTMessage::Piece(idx, offset, data) => {
             //println!("Piece: {} {} {:?} ", idx, offset, data.len());
             write_at_offset(&torrent.info.name,(idx*torrent.info.piece_length as u32 +offset )as u64, &data).await?;
         },
-        BTMessage::Cancel(idx, offset, length) => {},
+        BTMessage::Cancel(_idx, _offset, _length) => {},
     };
     Ok(())
 }
