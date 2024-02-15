@@ -174,7 +174,6 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
     if args.len() < 2 {
         let _ = no_args().await?;
         println!("{}", &args[0]);
-        println!("{}", &args[1]);
     } else {
         let command = &args[1];// &args[1];
         if command == "decode" {
@@ -218,8 +217,8 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
             println!("no args {} {:#?}", args.len(), args);
             println!("file_name: {}, _content {}", &args[3], &args[4]);
             let file_name = &args[3];
-            let _content = read_binary_file(&args[3])?;
-            let _piece_number = &args[4].parse::<u64>()?;
+            let _content = read_binary_file(&args[4])?;
+            let _piece_number = &args[5].parse::<u64>()?;
             let torrent_info = MetaData::new(bencode::decode(&_content)?)?;
             let _peers = discover_peers(&torrent_info).await?;
             let _handshake = Handshake::new(b"00112233445566778899", &torrent_info.raw().info_hash_u8()?);
