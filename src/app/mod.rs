@@ -177,8 +177,7 @@ pub(crate) async fn entrypoint(args: Vec<String>) -> Result<()> {
     } else {
 
 
-        let command = "download_piece";// &args[1];
-        println!("{command}");
+        let command = &args[1];// &args[1];
         if command == "decode" {
             let encoded_value = &args[2];
             let decoded_value = decode_bencoded_value(encoded_value)?;
